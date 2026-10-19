@@ -1,0 +1,41 @@
+# Despliegue de referencia en un VPS:  docker compose up -d --build
+# Pon delante un reverse proxy (Caddy / Nginx) con TLS, o Cloudflare Tunnel.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vidhost
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_DB: vidhost
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vidhost"]
+      interval: 5s
+      retries: 10
+
+  web:
+    build: { context: ., target: web }
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://vidhost:${POSTGRES_PASSWORD:-change-me}@db:5432/vidhost?schema=public
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      db: { condition: service_healthy }
+
+  # Solo necesario con VIDEO_PROVIDER=R2 y R2_HLS_ENABLED=true.
+  hls-worker:
+    build: { context: ., target: worker }
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://vidhost:${POSTGRES_PASSWORD:-change-me}@db:5432/vidhost?schema=public
+    depends_on:
+      db: { condition: service_healthy }
+    profiles: ["hls"]
+
+volumes:
+  pgdata:

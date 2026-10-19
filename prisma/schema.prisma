@@ -1,0 +1,83 @@
+// =============================================================================
+//  Esquema de base de datos
+// -----------------------------------------------------------------------------
+//  Regla de oro: los campos `provider`, `providerVideoId` y `providerMeta` son
+//  PRIVADOS del backend. Nunca se serializan hacia el cliente. Todo lo público
+//  (dashboard, embeds, API) se identifica exclusivamente por `publicId`.
+//  El mapeo a DTO público vive en `src/server/videos/dto.ts`.
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Proveedor de medios que almacena físicamente el video.
+/// Se guarda POR VIDEO: si cambias VIDEO_PROVIDER en el .env, los videos
+/// nuevos usarán el nuevo proveedor y los antiguos siguen reproduciéndose
+/// con el adaptador con el que se subieron.
+enum MediaProvider {
+  R2
+  STREAM
+}
+
+/// Ciclo de vida del video (agnóstico al proveedor).
+enum VideoStatus {
+  PENDING_UPLOAD // ticket de subida emitido, el cliente aún no confirma
+  PROCESSING // subido, el proveedor lo está procesando / transcodificando
+  READY // reproducible
+  ERROR // falló la subida o el procesamiento
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  videos Video[]
+}
+
+model Video {
+  id       String @id @default(cuid())
+  /// Identificador público y opaco (p. ej. `v_8fK2xQ9mLp3a`). Único dato expuesto.
+  publicId String @unique
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title       String
+  status      VideoStatus @default(PENDING_UPLOAD)
+  durationSec Float?
+  sizeBytes   BigInt      @default(0)
+  mimeType    String?
+
+  // ---------------- Campos privados (solo backend) ----------------
+  provider        MediaProvider
+  /// R2: object key del archivo original. STREAM: uid del video en Stream.
+  providerVideoId String
+  /// Metadatos específicos del adaptador (p. ej. `{ "hls": true }` en R2).
+  providerMeta    Json?
+  /// Mensaje interno de error (nunca se envía al cliente tal cual).
+  errorReason     String?
+  /// El adaptador pidió post-procesado en segundo plano (p. ej. generar HLS
+  /// en R2). El video puede estar READY (reproducción progresiva) mientras tanto.
+  postProcessPending Boolean   @default(false)
+  /// Bloqueo optimista para el worker de post-procesado.
+  jobLockedAt        DateTime?
+  // ----------------------------------------------------------------
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  readyAt   DateTime?
+
+  @@unique([provider, providerVideoId])
+  @@index([userId, createdAt])
+  @@index([status, updatedAt])
+  @@index([provider, postProcessPending])
+}

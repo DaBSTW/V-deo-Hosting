@@ -1,0 +1,13 @@
+name = "r2-event-forwarder"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+[vars]
+WEBHOOK_URL = "https://videos.example.com/api/webhooks/cloudflare"
+# WEBHOOK_SECRET → `npx wrangler secret put WEBHOOK_SECRET`
+
+[[queues.consumers]]
+queue = "r2-video-events"
+max_batch_size = 25
+max_batch_timeout = 5
+max_retries = 10

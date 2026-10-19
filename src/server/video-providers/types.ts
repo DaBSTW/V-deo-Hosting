@@ -1,0 +1,133 @@
+/**
+ * ============================================================================
+ *  VideoProviderAdapter — punto de abstracción central de la plataforma
+ * ============================================================================
+ *
+ *  Todo el resto del sistema (API, dashboard, embed, workers) habla con el
+ *  almacenamiento de video EXCLUSIVAMENTE a través de esta interfaz. Ningún
+ *  módulo fuera de `src/server/video-providers/` conoce R2, S3 o Stream.
+ *
+ *  Patrón Strategy: cada proveedor es una estrategia intercambiable; la
+ *  fábrica (`factory.ts`) decide cuál usar en función de `VIDEO_PROVIDER`
+ *  (para subidas nuevas) o del campo `provider` guardado en cada video
+ *  (para reproducir / borrar videos existentes).
+ */
+
+/** Debe coincidir con el enum `MediaProvider` de Prisma. */
+export type ProviderName = "R2" | "STREAM";
+
+/** Estado del video tal y como lo entiende la plataforma (agnóstico). */
+export type ProviderVideoStatus = "PENDING_UPLOAD" | "PROCESSING" | "READY" | "ERROR";
+
+/** Metadatos privados que el adaptador quiera persistir junto al video. */
+export type ProviderMeta = Record<string, string | number | boolean | null>;
+
+/** Referencia mínima que un adaptador necesita para operar sobre un video. */
+export interface ProviderVideoRef {
+  providerVideoId: string;
+  providerMeta: ProviderMeta | null;
+  mimeType: string | null;
+}
+
+export interface UploadRequest {
+  /** Nuestro id público; útil como etiqueta en el proveedor, nunca al revés. */
+  publicId: string;
+  fileName: string;
+  sizeBytes: number;
+  mimeType: string;
+}
+
+/**
+ * Instrucciones de subida que viajan al navegador. Son deliberadamente
+ * genéricas: el cliente solo sabe "haz un PUT a esta URL" o "usa subida
+ * reanudable contra esta URL". No hay credenciales ni nombres de proveedor.
+ */
+export type UploadInstructions =
+  | {
+      protocol: "single";
+      method: "PUT";
+      url: string;
+      headers: Record<string, string>;
+      expiresAt: string;
+    }
+  | {
+      protocol: "resumable";
+      url: string;
+      chunkSizeBytes: number;
+      expiresAt: string;
+    };
+
+export interface UploadTicket {
+  /** Id interno del proveedor (object key / uid). Se guarda solo en la DB. */
+  providerVideoId: string;
+  providerMeta?: ProviderMeta;
+  instructions: UploadInstructions;
+}
+
+export interface ProviderVideoState {
+  status: ProviderVideoStatus;
+  durationSec?: number | null;
+  sizeBytes?: number | null;
+  /** Motivo técnico (solo logs / DB, nunca UI). */
+  errorReason?: string | null;
+  /** Se fusiona con `providerMeta` existente. */
+  providerMeta?: ProviderMeta;
+  /** Solicita post-procesado en segundo plano (p. ej. generar HLS). */
+  postProcess?: boolean;
+}
+
+export interface PlaybackSource {
+  kind: "hls" | "mp4";
+  url: string;
+  mimeType: string;
+  posterUrl?: string | null;
+  /** ISO-8601; las URLs firmadas caducan. */
+  expiresAt?: string | null;
+}
+
+export interface ConfirmHints {
+  /** Tamaño declarado por el cliente al pedir la URL de subida. */
+  declaredSizeBytes: number;
+  /** Duración leída en el navegador (orientativa; el proveedor manda). */
+  clientDurationSec?: number | null;
+  maxSizeBytes: number;
+}
+
+export interface WebhookRequest {
+  rawBody: string;
+  headers: Headers;
+}
+
+/** Eventos normalizados que un webhook puede producir. */
+export type WebhookEvent =
+  | { type: "upload.completed"; providerVideoId: string }
+  | { type: "state.changed"; providerVideoId: string; state: ProviderVideoState };
+
+export interface VideoProviderAdapter {
+  readonly name: ProviderName;
+
+  /** Emite un ticket de subida directa cliente → proveedor (no pasa por el VPS). */
+  getUploadUrl(req: UploadRequest): Promise<UploadTicket>;
+
+  /**
+   * Verifica en el proveedor que la subida existe y es válida. Devuelve el
+   * estado resultante (READY / PROCESSING / ERROR / PENDING_UPLOAD si aún no llegó).
+   */
+  confirmUpload(ref: ProviderVideoRef, hints: ConfirmHints): Promise<ProviderVideoState>;
+
+  /** Consulta activa del estado (fallback cuando no llegan webhooks). */
+  getStatus(ref: ProviderVideoRef): Promise<ProviderVideoState>;
+
+  /** URL de reproducción (posiblemente firmada y con caducidad). */
+  getPlaybackUrl(ref: ProviderVideoRef): Promise<PlaybackSource>;
+
+  /** Elimina todos los archivos remotos del video. Idempotente. */
+  deleteVideo(ref: ProviderVideoRef): Promise<void>;
+
+  /**
+   * Procesa un webhook entrante. Devuelve `null` si la petición NO pertenece a
+   * este proveedor (permite un único endpoint genérico). Lanza
+   * `WebhookAuthError` si pertenece pero la firma no es válida.
+   */
+  handleWebhook(req: WebhookRequest): Promise<WebhookEvent[] | null>;
+}
