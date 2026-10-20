@@ -1,5 +1,6 @@
 import { DashboardApp } from "@/components/dashboard/DashboardApp";
 import type { FolderFilter } from "@/components/dashboard/types";
+import { isAdmin } from "@/server/auth/admin";
 import { requirePageUser } from "@/server/auth/session";
 import { listFolders, listVideos, maxUploadBytes } from "@/server/videos/service";
 import { getDashboardStats } from "@/server/videos/stats";
@@ -19,8 +20,13 @@ export default async function DashboardPage({ searchParams }: Props) {
   ]);
 
   // Sin parámetro → Resumen (portada del dashboard).
+  const admin = isAdmin(user.email);
   const initialFilter: FolderFilter =
-    folder === "all"
+    folder === "monetization"
+      ? { kind: "monetization" }
+      : folder === "admin" && admin
+        ? { kind: "admin" }
+        : folder === "all"
       ? { kind: "all" }
       : folder === "none"
         ? { kind: "none" }
@@ -30,7 +36,7 @@ export default async function DashboardPage({ searchParams }: Props) {
 
   return (
     <DashboardApp
-      user={{ email: user.email, name: user.name }}
+      user={{ email: user.email, name: user.name, isAdmin: admin }}
       initialVideos={videos}
       initialFolders={folders}
       initialFilter={initialFilter}

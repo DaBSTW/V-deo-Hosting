@@ -71,6 +71,11 @@ const coreSchema = z.object({
   ALLOW_DOWNLOADS: bool(true),
   /** Cuota de almacenamiento por usuario en GB (0 = sin límite). */
   STORAGE_QUOTA_GB: z.coerce.number().min(0).default(0),
+  /** Emails con acceso al panel de administración (separados por comas). */
+  ADMIN_EMAILS: z
+    .string()
+    .default("")
+    .transform((v) => v.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean)),
 });
 export const getCoreEnv = memo(() => parse("core", coreSchema));
 

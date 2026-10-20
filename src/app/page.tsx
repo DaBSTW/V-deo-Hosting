@@ -1,6 +1,18 @@
 import Link from "next/link";
 import { APP_NAME } from "@/lib/brand";
+import type { Metadata } from "next";
 import { getSessionUser } from "@/server/auth/session";
+import { getMonetizationSettings, parseMetaTag } from "@/server/monetization/settings";
+
+/** Etiqueta <meta> de verificación de Monetag (se pega en el panel de administración). */
+export async function generateMetadata(): Promise<Metadata> {
+  try {
+    const meta = parseMetaTag((await getMonetizationSettings()).monetagMetaTag);
+    return meta ? { other: { [meta.name]: meta.content } } : {};
+  } catch {
+    return {};
+  }
+}
 
 export default async function Home() {
   const user = await getSessionUser();

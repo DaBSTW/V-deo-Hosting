@@ -11,6 +11,7 @@
 import "plyr/dist/plyr.css";
 import { useEffect, useRef, useState } from "react";
 import type Plyr from "plyr";
+import { detectAdblock } from "@/lib/adblock";
 import type { PlaybackSource } from "@/server/video-providers/types";
 
 const I18N_ES = {
@@ -57,12 +58,15 @@ export function VideoPlayer({
   title,
   autoPlay = false,
   viewUrl,
+  qualifyAfterSec,
 }: {
   source: PlaybackSource;
   title: string;
   autoPlay?: boolean;
   /** Ruta firmada para contar la vista (una vez, al empezar a reproducir). */
   viewUrl?: string;
+  /** Segundos reproducidos para que la vista sea monetizable (`undefined` = sin monetizar). */
+  qualifyAfterSec?: number;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [failed, setFailed] = useState(false);
@@ -77,6 +81,38 @@ export function VideoPlayer({
     video.addEventListener("playing", onPlay, { once: true });
     return () => video.removeEventListener("playing", onPlay);
   }, [viewUrl]);
+
+  // Vista monetizable: tiempo REAL reproducido (no saltos) ≥ umbral, o el 50 %
+  // si el video es más corto. Se avisa una sola vez, indicando si hay bloqueador.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !viewUrl || !qualifyAfterSec) return;
+    let played = 0;
+    let last: number | null = null;
+    let sent = false;
+
+    const onTime = () => {
+      if (sent || video.paused || video.seeking) return;
+      const t = video.currentTime;
+      if (last !== null && t > last && t - last < 2) played += t - last;
+      last = t;
+      const threshold = Math.min(qualifyAfterSec, Number.isFinite(video.duration) ? video.duration * 0.5 : qualifyAfterSec);
+      if (played >= threshold) {
+        sent = true;
+        void detectAdblock().then((blocked) => {
+          const url = `${viewUrl}&stage=q&ad=${blocked ? 0 : 1}`;
+          if (!navigator.sendBeacon?.(url)) void fetch(url, { method: "POST", keepalive: true }).catch(() => {});
+        });
+      }
+    };
+    const reset = () => (last = null);
+    video.addEventListener("timeupdate", onTime);
+    video.addEventListener("seeking", reset);
+    return () => {
+      video.removeEventListener("timeupdate", onTime);
+      video.removeEventListener("seeking", reset);
+    };
+  }, [viewUrl, qualifyAfterSec]);
 
   useEffect(() => {
     const video = videoRef.current;

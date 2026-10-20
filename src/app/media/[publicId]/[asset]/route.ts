@@ -6,7 +6,8 @@ import { verifyMediaToken, type MediaAsset } from "@/server/videos/playback-toke
 import { prisma } from "@/lib/prisma";
 import { SESSION_COOKIE, verifySession } from "@/server/auth/jwt";
 import { resolveDownload, resolveMediaUrl } from "@/server/videos/service";
-import { recordView } from "@/server/videos/stats-buffer";
+import { getMonetizationSettings } from "@/server/monetization/settings";
+import { recordPaidView, recordView } from "@/server/videos/stats-buffer";
 
 export const dynamic = "force-dynamic";
 
@@ -72,11 +73,16 @@ body{margin:0;min-height:100vh;display:grid;place-items:center;background:#09090
   });
 }
 
+const BOT_UA = /bot|crawl|spider|slurp|headless|phantom|puppeteer|playwright|selenium|curl|wget|python|httpclient|java\//i;
+
 /**
- * POST /media/:publicId/view?e=&s=
- * Aviso de reproducción (navigator.sendBeacon al pulsar play). Coste mínimo:
- * verificación HMAC + contador en memoria, sin consultar la DB (salvo que
- * venga con sesión, para no contar las vistas del propio dueño).
+ * POST /media/:publicId/view?e=&s=[&stage=q&ad=1]
+ * Avisos del reproductor (navigator.sendBeacon):
+ *  - sin `stage`: empezó a reproducir → cuenta una reproducción.
+ *  - `stage=q`: superó el tiempo mínimo → candidata a vista MONETIZADA
+ *    (solo si `ad=1`, es decir, sin bloqueador de anuncios).
+ * Coste mínimo: firma HMAC + contadores en memoria, sin consultar la DB
+ * (salvo con sesión, para no contar al propio dueño).
  */
 export async function POST(req: NextRequest, ctx: Ctx) {
   const { publicId, asset } = await ctx.params;
@@ -89,6 +95,19 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   if (session) {
     const video = await prisma.video.findUnique({ where: { publicId }, select: { userId: true } });
     if (video?.userId === session.sub) return new NextResponse(null, { status: 204 });
+  }
+
+  // Los bots no cuentan ni como reproducción ni como vista monetizada.
+  const ua = req.headers.get("user-agent") ?? "";
+  if (!ua || BOT_UA.test(ua)) return new NextResponse(null, { status: 204 });
+
+  if (q.get("stage") === "q") {
+    const settings = await getMonetizationSettings();
+    if (settings.enabled && q.get("ad") === "1") {
+      // País por Cloudflare (CF-IPCountry); sin Cloudflare delante cae en Nivel 3.
+      recordPaidView(publicId, clientIp(req), req.headers.get("cf-ipcountry"), settings.perIpDailyCap);
+    }
+    return new NextResponse(null, { status: 204 });
   }
 
   recordView(publicId, clientIp(req));

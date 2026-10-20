@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import { Dialogs, type DialogState } from "../ui/Dialogs";
 import { Menu } from "../ui/Menu";
 import {
-  ChartIcon, FolderIcon, GridIcon, InboxIcon, ListIcon, MenuIcon, SearchIcon, TrashIcon, UploadIcon, XIcon,
+  ChartIcon, CogIcon, CoinsIcon, FolderIcon, GridIcon, InboxIcon, ListIcon, MenuIcon, SearchIcon, TrashIcon, UploadIcon, XIcon,
 } from "../ui/icons";
 import type { DashboardStats } from "@/server/videos/stats";
+import { AdminView } from "./monetization/AdminView";
+import { MonetizationView } from "./monetization/MonetizationView";
 import { Overview } from "./overview/Overview";
 import { Sidebar } from "./Sidebar";
 import { DRAG_MIME, type FolderFilter, type PublicFolder, type PublicVideo, type VideoActions } from "./types";
@@ -47,7 +49,7 @@ export function DashboardApp({
   initialStats,
   maxBytes,
 }: {
-  user: { email: string; name: string | null };
+  user: { email: string; name: string | null; isAdmin: boolean };
   initialVideos: PublicVideo[];
   initialFolders: PublicFolder[];
   initialFilter: FolderFilter;
@@ -107,10 +109,16 @@ export function DashboardApp({
   const currentFolderId = filter.kind === "folder" ? filter.id : null;
   const currentFolder = folders.find((f) => f.id === currentFolderId);
   const isOverview = filter.kind === "overview";
+  /** Vistas que no son de biblioteca (sin búsqueda, orden ni selección). */
+  const isPanel = isOverview || filter.kind === "monetization" || filter.kind === "admin";
   const title =
     filter.kind === "overview"
       ? "Resumen"
-      : filter.kind === "all"
+      : filter.kind === "monetization"
+        ? "Monetización"
+        : filter.kind === "admin"
+          ? "Administración"
+          : filter.kind === "all"
         ? "Todos los videos"
         : filter.kind === "none"
           ? "Sin carpeta"
@@ -146,7 +154,7 @@ export function DashboardApp({
     const list = videos.filter(
       (v) =>
         (filter.kind === "all" ||
-          filter.kind === "overview" ||
+          isPanel ||
           (filter.kind === "none" ? !v.folderId : v.folderId === filter.id)) &&
         (!q || v.title.toLowerCase().includes(q)),
     );
@@ -433,17 +441,25 @@ export function DashboardApp({
                   <InboxIcon className="h-4 w-4 text-zinc-400" />
                 ) : isOverview ? (
                   <ChartIcon className="h-4 w-4 text-zinc-400" />
+                ) : filter.kind === "monetization" ? (
+                  <CoinsIcon className="h-4 w-4 text-zinc-400" />
+                ) : filter.kind === "admin" ? (
+                  <CogIcon className="h-4 w-4 text-zinc-400" />
                 ) : null}
                 <span className="truncate">{title}</span>
               </h1>
               <p className="text-xs text-zinc-500">
                 {isOverview
                   ? "Tu actividad y el estado de tu biblioteca"
-                  : `${visible.length} ${visible.length === 1 ? "video" : "videos"}`}
+                  : filter.kind === "monetization"
+                    ? "Tus ganancias, tarifas y pagos"
+                    : filter.kind === "admin"
+                      ? "Monetag, tarifas y pagos a usuarios"
+                      : `${visible.length} ${visible.length === 1 ? "video" : "videos"}`}
               </p>
             </div>
 
-            {!isOverview && (
+            {!isPanel && (
             <>
             <div className="relative hidden md:block">
               <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
@@ -491,7 +507,7 @@ export function DashboardApp({
             </button>
           </div>
 
-          <div className={`px-4 pb-3 md:hidden ${isOverview ? "hidden" : ""}`}>
+          <div className={`px-4 pb-3 md:hidden ${isPanel ? "hidden" : ""}`}>
             <div className="relative">
               <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
               <input
@@ -505,7 +521,7 @@ export function DashboardApp({
         </header>
 
         {/* Barra de selección múltiple */}
-        {selected.size > 0 && !isOverview && (
+        {selected.size > 0 && !isPanel && (
           <div className="sticky top-16 z-10 mx-4 mt-4 flex items-center gap-2 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm text-white shadow-lg sm:mx-6">
             <span className="font-medium">{selected.size} seleccionados</span>
             <div className="flex-1" />
@@ -543,7 +559,16 @@ export function DashboardApp({
         )}
 
         <main className="flex-1 px-4 py-6 sm:px-6">
-          {isOverview ? (
+          {filter.kind === "monetization" ? (
+            <MonetizationView
+              notify={notify}
+              isAdmin={user.isAdmin}
+              onOpenAdmin={() => changeFilter({ kind: "admin" })}
+              confirm={(o) => setDialog({ kind: "confirm", ...o })}
+            />
+          ) : filter.kind === "admin" && user.isAdmin ? (
+            <AdminView notify={notify} openDialog={setDialog} />
+          ) : isOverview ? (
             <Overview
               videos={videos}
               stats={stats}

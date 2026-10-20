@@ -86,6 +86,12 @@ workers/r2-event-forwarder               (opcional) Worker: eventos R2 → webho
 | `POST`   | `/api/videos/move`           | `{ videoIds[], folderId }` → mover varios a la vez |
 | `GET`    | `/api/stats`                 | Series diarias de reproducciones/descargas (180 días) y cuota |
 | `POST`   | `/media/:publicId/view`      | Aviso de reproducción (firmado; lo envía el reproductor al pulsar play) |
+| `GET`/`PATCH` | `/api/monetization`     | Saldo, ganancias, tarifas e historial / activar y método de cobro |
+| `POST`   | `/api/monetization/payouts`  | Solicitar el cobro del saldo disponible |
+| `GET`/`PUT` | `/api/admin/monetization` | (admin) Ajustes, código de Monetag y resumen |
+| `GET`    | `/api/admin/payouts`         | (admin) Cola de pagos |
+| `PATCH`  | `/api/admin/payouts/:id`     | (admin) `approve` / `pay` (con referencia) / `reject` (con motivo) |
+| `GET`    | `/sw.js`                     | Service worker de Monetag (formato Push) |
 | `GET`    | `/api/folders`               | Carpetas del usuario |
 | `POST`   | `/api/folders`               | `{ name }` → crear carpeta |
 | `PATCH`  | `/api/folders/:id`           | `{ name }` → renombrar |
@@ -143,6 +149,48 @@ que afecta a todo lo de abajo:
 Las descargas se cuentan igual, en la redirección de `/media/<id>/download`. Si el proceso se
 reinicia de golpe se pueden perder como mucho los últimos ~10 s de eventos. Al borrar un video
 se borran también sus estadísticas.
+
+## Monetización (Monetag)
+
+**Modelo:** Monetag te paga a ti por los anuncios que se muestran en el reproductor y en el enlace
+directo. Tú pagas a tus usuarios una **tarifa fija por cada 1.000 vistas monetizadas**, según el país
+del espectador (Nivel 1/2/3). El país lo da Cloudflare en `CF-IPCountry`; sin Cloudflare delante, todo
+cuenta como Nivel 3.
+
+### Puesta en marcha
+
+1. Define `ADMIN_EMAILS` y entra con esa cuenta. Aparece **Administración** en la barra lateral.
+2. En Monetag añade tu dominio, copia la etiqueta `<meta>` de verificación (se inserta en la portada)
+   y, si usas Push, el contenido de `sw.js` (se sirve en `/sw.js`).
+3. Crea las zonas y pega su código en «Código de anuncios para el reproductor». Solo se inserta en
+   `/embed/*` y `/v/*` de videos monetizados, nunca en el dashboard.
+4. Ajusta tarifas y reglas, y activa la monetización.
+
+### Qué cuenta como vista monetizada
+
+* El reproductor envía un segundo aviso tras **N segundos reales de reproducción** (sin contar saltos),
+  o el 50 % del video si es más corto, indicando si hay **bloqueador de anuncios** (con bloqueador no se paga).
+* El servidor descarta bots (por User-Agent), al propio dueño, repeticiones de la **misma IP y video en
+  24 h** y lo que supere el **tope diario por IP**. Todo en memoria, sin consultar la DB.
+* Se acumula por lotes (`EarningDaily`, en micro-dólares) con la tarifa vigente en ese momento.
+* Las ganancias quedan **retenidas `holdDays` días** antes de poder cobrarse (margen antifraude).
+
+### Pagos
+
+El usuario elige un método (PayPal, USDT TRC20, Payoneer o transferencia, cada uno con su mínimo) y
+solicita el cobro de todo su saldo disponible. En Administración apruebas, envías el pago por tu cuenta
+y lo marcas como **pagado** con la referencia. Si lo **rechazas** (con un motivo visible para el
+usuario), el importe vuelve a su saldo automáticamente.
+
+### Cómo fijar las tarifas sin perder dinero
+
+* **Mide antes de prometer.** Activa los anuncios 2-4 semanas con tarifas conservadoras y calcula tu
+  **eCPM real por nivel** = ingresos de Monetag ÷ vistas monetizadas × 1.000.
+* **Paga entre el 50 y el 70 % de ese eCPM.** El resto cubre almacenamiento, Stream (si lo usas se
+  paga por minuto entregado), fraude no detectado y tu margen.
+* **Revisa las tarifas cada mes.** El eCPM de las redes de popunder varía mucho por país y temporada.
+  Un cambio de tarifa solo afecta a las vistas futuras.
+* Las tarifas por defecto (1,00 / 0,40 / 0,10 USD) son solo un punto de partida, no una recomendación de mercado.
 
 ## Página pública: descargar e insertar
 

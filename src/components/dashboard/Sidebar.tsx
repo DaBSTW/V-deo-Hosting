@@ -5,12 +5,12 @@ import { APP_NAME } from "@/lib/brand";
 import { formatBytes } from "@/lib/format";
 import { Menu } from "../ui/Menu";
 import {
-  ChartIcon, DotsIcon, FolderIcon, FolderPlusIcon, InboxIcon, LibraryIcon, LogoutIcon, PencilIcon, PlayIcon, TrashIcon, UploadIcon,
+  ChartIcon, CogIcon, CoinsIcon, DotsIcon, FolderIcon, FolderPlusIcon, InboxIcon, LibraryIcon, LogoutIcon, PencilIcon, PlayIcon, TrashIcon, UploadIcon,
 } from "../ui/icons";
 import { DRAG_MIME, type FolderFilter, type PublicFolder } from "./types";
 
 interface Props {
-  user: { email: string; name: string | null };
+  user: { email: string; name: string | null; isAdmin: boolean };
   folders: PublicFolder[];
   counts: { all: number; none: number; byFolder: Map<string, number> };
   totalBytes: number;
@@ -65,6 +65,20 @@ export function Sidebar(p: Props) {
           active={isActive({ kind: "overview" })}
           onClick={() => p.onFilter({ kind: "overview" })}
         />
+        <NavItem
+          icon={<CoinsIcon />}
+          label="Monetización"
+          active={isActive({ kind: "monetization" })}
+          onClick={() => p.onFilter({ kind: "monetization" })}
+        />
+        {p.user.isAdmin && (
+          <NavItem
+            icon={<CogIcon />}
+            label="Administración"
+            active={isActive({ kind: "admin" })}
+            onClick={() => p.onFilter({ kind: "admin" })}
+          />
+        )}
 
         <div className="mt-6" />
         <SectionTitle>Biblioteca</SectionTitle>

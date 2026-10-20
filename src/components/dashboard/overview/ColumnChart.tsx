@@ -20,13 +20,13 @@ const M = { top: 12, right: 4, bottom: 26, left: 40 };
 const COLOR = "var(--color-brand-500)";
 const COLOR_ACTIVE = "var(--color-brand-700)";
 
-function niceScale(max: number, ticks = 4) {
-  if (max <= 0) return { top: ticks, step: 1 };
+function niceScale(max: number, integer: boolean, ticks = 4) {
+  if (max <= 0) return integer ? { top: ticks, step: 1 } : { top: 1, step: 0.25 };
   const raw = max / ticks;
   const pow = 10 ** Math.floor(Math.log10(raw));
   const step = [1, 2, 2.5, 5, 10].map((m) => m * pow).find((s) => s >= raw) ?? 10 * pow;
-  const nice = Math.max(1, step);
-  return { top: Math.ceil(max / nice) * nice, step: nice };
+  const nice = integer ? Math.max(1, step) : step;
+  return { top: Math.ceil(max / nice - 1e-9) * nice, step: nice };
 }
 
 /** Rectángulo con las dos esquinas superiores redondeadas (base recta). */
@@ -35,7 +35,21 @@ function columnPath(x: number, y: number, w: number, h: number) {
   return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
 }
 
-export function ColumnChart({ data, unit, label }: { data: ColumnPoint[]; unit: string; label: string }) {
+export function ColumnChart({
+  data,
+  unit = "",
+  label,
+  format = formatCount,
+  integer = true,
+}: {
+  data: ColumnPoint[];
+  unit?: string;
+  label: string;
+  /** Formato de ticks y tooltip (p. ej. moneda). */
+  format?: (n: number) => string;
+  /** Valores enteros (conteos) o decimales (importes). */
+  integer?: boolean;
+}) {
   const wrap = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(640);
   const [active, setActive] = useState<number | null>(null);
@@ -51,11 +65,11 @@ export function ColumnChart({ data, unit, label }: { data: ColumnPoint[]; unit: 
   const innerW = width - M.left - M.right;
   const innerH = HEIGHT - M.top - M.bottom;
   const max = Math.max(0, ...data.map((d) => d.value));
-  const { top, step } = niceScale(max);
+  const { top, step } = niceScale(max, integer);
   const band = innerW / Math.max(1, data.length);
   const barW = Math.max(2, Math.min(24, band - 2));
   const y = (v: number) => M.top + innerH - (v / top) * innerH;
-  const ticks = Array.from({ length: Math.round(top / step) + 1 }, (_, i) => i * step);
+  const ticks = Array.from({ length: Math.round(top / step) + 1 }, (_, i) => Math.round(i * step * 1e6) / 1e6);
   const labelEvery = Math.max(1, Math.ceil(data.length / Math.max(2, Math.floor(innerW / 70))));
 
   const onKey = (e: KeyboardEvent) => {
@@ -89,7 +103,7 @@ export function ColumnChart({ data, unit, label }: { data: ColumnPoint[]; unit: 
           <g key={t}>
             <line x1={M.left} x2={width - M.right} y1={y(t)} y2={y(t)} stroke={t === 0 ? "#d4d4d8" : "#ececee"} strokeWidth={1} shapeRendering="crispEdges" />
             <text x={M.left - 8} y={y(t)} dy="0.32em" textAnchor="end" className="fill-zinc-400 text-[11px] tabular-nums">
-              {formatCount(t)}
+              {format(t)}
             </text>
           </g>
         ))}
@@ -135,7 +149,7 @@ export function ColumnChart({ data, unit, label }: { data: ColumnPoint[]; unit: 
           style={{ left: Math.min(Math.max(tipX, 60), width - 60), top: Math.max(0, y(a.value) - 8) }}
         >
           <p className="text-sm font-semibold text-white">
-            {formatCount(a.value)} <span className="font-normal text-zinc-400">{unit}</span>
+            {format(a.value)} {unit && <span className="font-normal text-zinc-400">{unit}</span>}
           </p>
           <p className="text-[11px] text-zinc-400">{formatDay(a.date, true)}</p>
         </div>

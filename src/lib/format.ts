@@ -66,3 +66,14 @@ export function formatDay(isoDate: string, withWeekday = false): string {
     timeZone: "UTC",
   }).format(new Date(`${isoDate}T00:00:00Z`));
 }
+
+const usd2 = new Intl.NumberFormat("es", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const usd4 = new Intl.NumberFormat("es", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 4 });
+
+/** Importe en USD. `micros` = millonésimas de dólar (como se guardan en la DB). */
+export function formatMicros(micros: number, precise = false): string {
+  const usd = micros / 1e6;
+  if (!precise && usd > 0 && usd < 0.01) return `< ${usd2.format(0.01)}`;
+  return (precise ? usd4 : usd2).format(usd);
+}
+export const formatUsd = (usd: number, precise = false) => (precise ? usd4 : usd2).format(usd);

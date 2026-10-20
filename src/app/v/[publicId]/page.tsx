@@ -3,7 +3,7 @@ import { WatchActions } from "@/components/watch/WatchActions";
 import { APP_NAME } from "@/lib/brand";
 import { formatDuration } from "@/lib/format";
 import { embedUrlFor } from "@/server/videos/dto";
-import { EmbedBody, loadEmbed } from "@/server/videos/embed-view";
+import { AdSlot, EmbedBody, loadEmbed } from "@/server/videos/embed-view";
 import { getCoreEnv } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
@@ -41,6 +41,7 @@ export default async function WatchPage({ params }: Props) {
           />
         )}
       </main>
+      <AdSlot data={data} />
     </div>
   );
 }

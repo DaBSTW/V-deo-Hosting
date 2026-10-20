@@ -23,6 +23,7 @@ import type {
 import { toPublicVideo, type PublicVideo } from "./dto";
 import { mediaPath } from "./playback-token";
 import { recordDownload } from "./stats-buffer";
+import { getMonetizationSettings } from "../monetization/settings";
 
 /** Reutilización de URLs firmadas: una vista = render + source + poster. */
 const PLAYBACK_CACHE_MS = 60_000;
@@ -326,6 +327,8 @@ export type EmbedLookup =
       downloads: PublicDownloadOption[];
       /** Ruta firmada a la que el reproductor avisa (una vez) al empezar a reproducir. */
       viewUrl: string;
+      /** `null` si el video no está monetizado. */
+      monetization: { qualifyAfterSec: number; adSnippet: string } | null;
     };
 
 export interface PublicDownloadOption {
@@ -342,14 +345,17 @@ const downloadsEnabled = (v: Video) => v.allowDownload && getCoreEnv().ALLOW_DOW
  * (`/media/...`); la URL real del proveedor solo se resuelve al pedirlas.
  */
 export async function getEmbedPlayback(publicId: string): Promise<EmbedLookup> {
-  const video = await prisma.video.findUnique({ where: { publicId } });
+  const video = await prisma.video.findUnique({
+    where: { publicId },
+    include: { user: { select: { monetizationEnabled: true } } },
+  });
   if (!video) return { state: "not_found" };
   if (video.status === "ERROR") return { state: "error", title: video.title };
   if (video.status !== "READY") return { state: "processing", title: video.title };
 
   // El adaptador decide formato (HLS/MP4) y si hay miniatura; nosotros
   // sustituimos sus URLs por rutas propias antes de enviarlas al navegador.
-  const real = await providerPlayback(video);
+  const [real, mon] = await Promise.all([providerPlayback(video), getMonetizationSettings()]);
   const downloads = downloadsEnabled(video)
     ? getAdapter(video.provider)
         .listDownloadOptions(refOf(video), Number(video.sizeBytes))
@@ -360,6 +366,10 @@ export async function getEmbedPlayback(publicId: string): Promise<EmbedLookup> {
     publicId,
     downloads,
     viewUrl: mediaPath(publicId, "view"),
+    monetization:
+      mon.enabled && video.user.monetizationEnabled
+        ? { qualifyAfterSec: mon.minWatchSeconds, adSnippet: mon.monetagPlayerSnippet }
+        : null,
     title: video.title,
     durationSec: video.durationSec,
     source: {

@@ -8,6 +8,7 @@ import {
 } from "../../ui/icons";
 import type { PublicVideo, VideoActions } from "../types";
 import { VideoThumb } from "../VideoThumb";
+import { Segmented } from "../monetization/ui";
 import { ColumnChart, Sparkline } from "./ColumnChart";
 
 type Range = 7 | 30 | 90;
@@ -412,33 +413,6 @@ function MiniStat({ icon, label, value, hint }: { icon: ReactNode; label: string
         <p className="text-base font-semibold tracking-tight">{value}</p>
         {hint && <p className="truncate text-[11px] text-zinc-400">{hint}</p>}
       </div>
-    </div>
-  );
-}
-
-function Segmented<T extends string | number>({
-  label, value, onChange, options,
-}: {
-  label: string;
-  value: T;
-  onChange: (v: T) => void;
-  options: { value: T; label: string }[];
-}) {
-  return (
-    <div role="radiogroup" aria-label={label} className="inline-flex rounded-xl bg-white p-1 ring-1 ring-zinc-200">
-      {options.map((o) => (
-        <button
-          key={String(o.value)}
-          role="radio"
-          aria-checked={value === o.value}
-          onClick={() => onChange(o.value)}
-          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-            value === o.value ? "bg-zinc-900 text-white" : "text-zinc-500 hover:text-zinc-800"
-          }`}
-        >
-          {o.label}
-        </button>
-      ))}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { EmbedBody, loadEmbed } from "@/server/videos/embed-view";
+import { AdSlot, EmbedBody, loadEmbed } from "@/server/videos/embed-view";
 
 // Siempre dinámico: las URLs de reproducción firmadas caducan.
 export const dynamic = "force-dynamic";
@@ -21,6 +21,7 @@ export default async function EmbedPage({ params, searchParams }: Props) {
   return (
     <div className="fixed inset-0 overflow-hidden bg-black">
       <EmbedBody data={data} autoPlay={autoplay === "1"} />
+      <AdSlot data={data} />
     </div>
   );
 }

@@ -6,6 +6,8 @@ export type { PublicVideo, PublicFolder };
 /** Vista actual: resumen, todos, sin carpeta o una carpeta concreta. */
 export type FolderFilter =
   | { kind: "overview" }
+  | { kind: "monetization" }
+  | { kind: "admin" }
   | { kind: "all" }
   | { kind: "none" }
   | { kind: "folder"; id: string };

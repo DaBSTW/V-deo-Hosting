@@ -43,6 +43,16 @@ model User {
 
   videos  Video[]
   folders Folder[]
+
+  // ---------------- Monetización ----------------
+  /// Si es `false`, sus videos no muestran anuncios y no generan ganancias.
+  monetizationEnabled Boolean        @default(true)
+  /// Método de cobro elegido (p. ej. PAYPAL, USDT_TRC20, PAYONEER).
+  payoutMethod        String?
+  /// Destino del cobro (email de PayPal, dirección de wallet…).
+  payoutDetails       String?
+  earnings            EarningDaily[]
+  payouts             Payout[]
 }
 
 /// Carpetas del usuario para organizar sus videos (un nivel, sin anidar).
@@ -118,7 +128,58 @@ model VideoDailyStat {
   day       DateTime @db.Date
   views     Int      @default(0)
   downloads Int      @default(0)
+  /// Vistas que cumplieron las reglas de monetización.
+  paidViews Int      @default(0)
 
   @@id([videoId, day])
   @@index([day])
+}
+
+/// Ganancias diarias por usuario y nivel de país. Importes en micro-dólares
+/// (1 USD = 1 000 000) para evitar errores de coma flotante.
+model EarningDaily {
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  day          DateTime @db.Date
+  /// T1 | T2 | T3 (ver src/server/monetization/tiers.ts)
+  tier         String
+  views        Int      @default(0)
+  amountMicros BigInt   @default(0)
+
+  @@id([userId, day, tier])
+  @@index([day])
+}
+
+enum PayoutStatus {
+  PENDING // solicitado por el usuario
+  APPROVED // revisado por un administrador, pendiente de enviar
+  PAID // enviado (con referencia de la transacción)
+  REJECTED // rechazado: el importe vuelve al saldo
+}
+
+model Payout {
+  id           String       @id @default(cuid())
+  userId       String
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amountMicros BigInt
+  method       String
+  /// Copia del destino en el momento de la solicitud.
+  details      String
+  status       PayoutStatus @default(PENDING)
+  /// Referencia del pago (id de transacción PayPal, hash de la transferencia…).
+  reference    String?
+  /// Nota del administrador (motivo de rechazo, etc.).
+  note         String?
+  createdAt    DateTime     @default(now())
+  processedAt  DateTime?
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+}
+
+/// Ajustes de la plataforma editables desde el panel de administración.
+model PlatformSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
 }
