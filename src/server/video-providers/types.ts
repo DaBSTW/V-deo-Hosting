@@ -100,6 +100,24 @@ export interface PlaybackSource {
   expiresAt?: string | null;
 }
 
+/**
+ * Resultado de pedir una descarga. Algunos proveedores generan el MP4
+ * descargable de forma asíncrona (`preparing`).
+ */
+export type DownloadResult =
+  | { status: "ready"; url: string }
+  | { status: "preparing" }
+  | { status: "unavailable"; reason?: string };
+
+/** Una calidad descargable (p. ej. "Original", "720p"). */
+export interface DownloadOption {
+  /** Identificador opaco para pedirla (`original`, `720`, `default`…). */
+  id: string;
+  label: string;
+  height?: number | null;
+  sizeBytes?: number | null;
+}
+
 export interface ConfirmHints {
   /** Tamaño declarado por el cliente al pedir la URL de subida. */
   declaredSizeBytes: number;
@@ -137,6 +155,21 @@ export interface VideoProviderAdapter {
 
   /** URL de reproducción (posiblemente firmada y con caducidad). */
   getPlaybackUrl(ref: ProviderVideoRef): Promise<PlaybackSource>;
+
+  /**
+   * URL de descarga DIRECTA desde el proveedor (firmada, con
+   * `Content-Disposition: attachment`). El VPS solo redirige: no transfiere bytes.
+   */
+  getDownloadUrl(ref: ProviderVideoRef, baseName: string, optionId: string): Promise<DownloadResult>;
+
+  /**
+   * Calidades descargables, calculadas SOLO con los metadatos guardados
+   * (sin llamadas de red). La primera es la opción por defecto.
+   */
+  listDownloadOptions(ref: ProviderVideoRef, originalSizeBytes: number): DownloadOption[];
+
+  /** Hook opcional cuando un video pasa a READY (p. ej. preparar la descarga). */
+  onReady?(ref: ProviderVideoRef): Promise<void>;
 
   /** Elimina todos los archivos remotos del video. Idempotente. */
   deleteVideo(ref: ProviderVideoRef): Promise<void>;

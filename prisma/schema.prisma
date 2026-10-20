@@ -75,6 +75,8 @@ model Video {
   status      VideoStatus @default(PENDING_UPLOAD)
   /// Hay miniatura disponible (la genera el navegador, el proveedor o el worker).
   hasThumbnail Boolean    @default(false)
+  /// El dueño permite descargar el archivo desde la página pública.
+  allowDownload Boolean   @default(true)
   durationSec Float?
   sizeBytes   BigInt      @default(0)
   mimeType    String?

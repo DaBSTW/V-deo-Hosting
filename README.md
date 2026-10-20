@@ -82,7 +82,7 @@ workers/r2-event-forwarder               (opcional) Worker: eventos R2 → webho
 | `POST`   | `/api/videos/upload-url`     | `{ title, fileName, sizeBytes, mimeType, folderId? }` → `{ videoId, upload, thumbnailUpload? }` |
 | `POST`   | `/api/videos/confirm`        | `{ videoId, durationSec?, hasThumbnail? }` → verifica con el proveedor y activa el video |
 | `GET`    | `/api/videos/:publicId`      | Detalle de un video |
-| `PATCH`  | `/api/videos/:publicId`      | `{ title?, folderId? }` → renombrar / mover (`folderId: null` = sin carpeta) |
+| `PATCH`  | `/api/videos/:publicId`      | `{ title?, folderId?, allowDownload? }` → renombrar / mover / permitir descarga |
 | `POST`   | `/api/videos/move`           | `{ videoIds[], folderId }` → mover varios a la vez |
 | `GET`    | `/api/folders`               | Carpetas del usuario |
 | `POST`   | `/api/folders`               | `{ name }` → crear carpeta |
@@ -90,7 +90,7 @@ workers/r2-event-forwarder               (opcional) Worker: eventos R2 → webho
 | `DELETE` | `/api/folders/:id`           | Borra la carpeta; sus videos pasan a «Sin carpeta» |
 | `DELETE` | `/api/videos/:publicId`      | Borra los archivos remotos (vía adaptador) y el registro local |
 | `POST`   | `/api/webhooks/cloudflare`   | Receptor genérico (Stream: `Webhook-Signature`; R2: `X-R2-Event-Signature`) |
-| `GET`    | `/media/:publicId/:asset`    | `source` \| `poster`: pasarela firmada → `302` |
+| `GET`    | `/media/:publicId/:asset`    | `source` \| `poster` \| `download?q=<calidad>`: pasarela firmada → `302` |
 
 `upload` es una instrucción genérica, igual sea cual sea el proveedor:
 
@@ -112,6 +112,25 @@ workers/r2-event-forwarder               (opcional) Worker: eventos R2 → webho
 * Panel flotante de subidas (2 en paralelo) con la miniatura local, el progreso y un botón para cancelar.
 * Modal de detalle con el reproductor real (el mismo `iframe` que verán tus visitantes), un selector
   de carpeta y botones para copiar el código de inserción y el enlace directo.
+
+## Página pública: descargar e insertar
+
+El enlace directo (`/v/<id>`) muestra, bajo el reproductor:
+
+* **Descargar**: si hay una sola calidad es un botón directo; si hay varias, un menú para elegir
+  (con el tamaño de cada una). El enlace apunta a `/media/<id>/download?q=<calidad>` (firmado; la
+  calidad no se puede manipular), que responde con un **302 a la descarga directa del proveedor**
+  con `Content-Disposition: attachment` y el nombre del video. **El archivo no pasa por el VPS.**
+* **Insertar**: panel con el código `<iframe>` en versión adaptable o de tamaño fijo, listo para copiar.
+* **Copiar enlace**.
+
+El dueño puede desactivar la descarga de cada video desde el modal del dashboard
+(«Permitir descarga»). `ALLOW_DOWNLOADS=false` la desactiva en toda la plataforma.
+
+| Proveedor | Calidades descargables |
+|---|---|
+| **R2** | Siempre el **original** (URL prefirmada de 15 min). Con el worker HLS y `R2_HLS_DOWNLOAD_RENDITIONS=true`, también **1080p/720p/480p/360p** (según el original). Se obtienen re-empaquetando a MP4 (`-c copy`) lo que el worker ya codificó para HLS: no se codifica nada más, solo cuesta el almacenamiento extra. |
+| **Stream** | Un único MP4 que genera Cloudflare. Se solicita automáticamente cuando el video queda listo. Si alguien pulsa «Descargar» antes de que esté, ve una página «Preparando tu descarga…» que se recarga sola. |
 
 ## Miniaturas (sin cargar el VPS)
 

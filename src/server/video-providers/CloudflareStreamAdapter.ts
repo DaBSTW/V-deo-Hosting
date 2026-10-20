@@ -15,6 +15,8 @@ import { ProviderError, WebhookAuthError } from "./errors";
 import { hmacSha256Hex, safeEqualHex } from "./hmac";
 import type {
   ConfirmHints,
+  DownloadOption,
+  DownloadResult,
   PlaybackSource,
   ProviderVideoRef,
   ProviderVideoState,
@@ -134,6 +136,49 @@ export class CloudflareStreamAdapter implements VideoProviderAdapter {
       mimeType: "application/vnd.apple.mpegurl",
       posterUrl: `${host}/${id}/thumbnails/thumbnail.jpg?time=2s&height=720`,
       expiresAt: this.env.CF_STREAM_REQUIRE_SIGNED_URLS ? new Date(exp * 1000).toISOString() : null,
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  /**
+   * Stream genera el MP4 descargable bajo demanda (asíncrono). Lo pedimos
+   * en cuanto el video queda listo (`onReady`) para que, normalmente, ya
+   * esté disponible cuando alguien pulse "Descargar".
+   */
+  async onReady(ref: ProviderVideoRef): Promise<void> {
+    await this.fetchRaw(`${this.baseUrl}/${this.uid(ref)}/downloads`, { method: "POST" });
+  }
+
+  /** Stream genera un único MP4 descargable por video. */
+  listDownloadOptions(_ref: ProviderVideoRef, originalSizeBytes: number): DownloadOption[] {
+    return [{ id: "default", label: "MP4", sizeBytes: originalSizeBytes || null }];
+  }
+
+  async getDownloadUrl(ref: ProviderVideoRef, baseName: string): Promise<DownloadResult> {
+    const uid = this.uid(ref);
+    const res = await this.fetchRaw(`${this.baseUrl}/${uid}/downloads`, { method: "GET" });
+    const body = res.ok
+      ? ((await res.json().catch(() => null)) as ApiEnvelope<{
+          default?: { status?: string; url?: string };
+        }> | null)
+      : null;
+    const download = body?.result?.default;
+
+    if (!download) {
+      // Aún no se había solicitado: lo pedimos ahora.
+      await this.onReady(ref);
+      return { status: "preparing" };
+    }
+    if (download.status === "error") return { status: "unavailable", reason: "error del proveedor" };
+    if (download.status !== "ready") return { status: "preparing" };
+
+    // Con URLs firmadas, el token sustituye al uid también en la descarga.
+    const exp = Math.floor(Date.now() / 1000) + 15 * 60;
+    const id = this.env.CF_STREAM_REQUIRE_SIGNED_URLS ? await this.playbackToken(uid, exp) : uid;
+    const name = encodeURIComponent(baseName.slice(0, 120));
+    return {
+      status: "ready",
+      url: `https://${this.env.CF_STREAM_DELIVERY_HOST}/${id}/downloads/default.mp4?filename=${name}`,
     };
   }
 

@@ -66,3 +66,6 @@ export const ChevronDownIcon = (p: P) => <Svg {...p}><path d="m6 9 6 6 6-6" /></
 export const MoveIcon = (p: P) => (
   <Svg {...p}><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Zm8 6h6m-2-2 2 2-2 2" /></Svg>
 );
+export const DownloadIcon = (p: P) => (
+  <Svg {...p}><path d="M12 4v12m0 0-4-4m4 4 4-4M4 18v1a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1" /></Svg>
+);

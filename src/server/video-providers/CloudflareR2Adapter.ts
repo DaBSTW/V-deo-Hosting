@@ -36,10 +36,13 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { getCoreEnv, getR2Env } from "@/lib/env";
 import { randomToken } from "@/lib/ids";
+import { attachmentDisposition, safeFileName } from "./download";
 import { ProviderError, WebhookAuthError } from "./errors";
 import { hmacSha256Hex, safeEqualHex } from "./hmac";
 import type {
   ConfirmHints,
+  DownloadOption,
+  DownloadResult,
   PlaybackSource,
   ProviderVideoRef,
   ProviderVideoState,
@@ -52,6 +55,8 @@ import type {
 
 const UPLOAD_URL_TTL_SEC = 60 * 60;
 const THUMBNAIL_MAX_BYTES = 2 * 1024 * 1024;
+/** Basta con que la descarga EMPIECE antes de caducar; luego continúa. */
+const DOWNLOAD_URL_TTL_SEC = 15 * 60;
 const KEY_RE = /^videos\/[0-9A-Za-z]{24}\/source\.[a-z0-9]{2,5}$/;
 const SIGNATURE_HEADER = "x-r2-event-signature";
 
@@ -246,6 +251,64 @@ export class CloudflareR2Adapter implements VideoProviderAdapter {
   }
 
   // -------------------------------------------------------------------------
+  /**
+   * Descarga del archivo ORIGINAL directamente desde R2. Siempre con URL
+   * prefirmada (aunque haya dominio propio) porque así podemos forzar
+   * `Content-Disposition: attachment` con el nombre del video.
+   */
+  async getDownloadUrl(ref: ProviderVideoRef, baseName: string, optionId: string): Promise<DownloadResult> {
+    const folder = CloudflareR2Adapter.folderOf(ref.providerVideoId);
+    let key: string;
+    let fileName: string;
+    let contentType: string;
+
+    if (optionId === "original") {
+      key = ref.providerVideoId;
+      fileName = safeFileName(baseName, CloudflareR2Adapter.extensionOf(key));
+      contentType = ref.mimeType ?? "application/octet-stream";
+    } else {
+      // Solo se aceptan calidades que el worker registró en los metadatos.
+      const rendition = renditionsOf(ref).find((r) => String(r.h) === optionId);
+      if (!rendition) return { status: "unavailable", reason: "calidad inexistente" };
+      key = `${folder}/downloads/${rendition.h}p.mp4`;
+      fileName = safeFileName(`${baseName} (${rendition.h}p)`, "mp4");
+      contentType = "video/mp4";
+    }
+
+    const url = await this.wrap("presign download", () =>
+      getSignedUrl(
+        this.s3,
+        new GetObjectCommand({
+          Bucket: this.env.R2_BUCKET,
+          Key: key,
+          ResponseContentDisposition: attachmentDisposition(fileName),
+          ResponseContentType: contentType,
+        }),
+        { expiresIn: DOWNLOAD_URL_TTL_SEC },
+      ),
+    );
+    return { status: "ready", url };
+  }
+
+  listDownloadOptions(ref: ProviderVideoRef, originalSizeBytes: number): DownloadOption[] {
+    const sourceHeight = Number(ref.providerMeta?.sourceHeight) || null;
+    return [
+      {
+        id: "original",
+        label: sourceHeight ? `Original (${sourceHeight}p)` : "Original",
+        height: sourceHeight,
+        sizeBytes: originalSizeBytes,
+      },
+      ...renditionsOf(ref).map((r) => ({ id: String(r.h), label: `${r.h}p`, height: r.h, sizeBytes: r.bytes })),
+    ];
+  }
+
+  /** Extensión del archivo original (para nombrar la descarga). */
+  static extensionOf(key: string): string {
+    return key.slice(key.lastIndexOf(".") + 1) || "mp4";
+  }
+
+  // -------------------------------------------------------------------------
   async deleteVideo(ref: ProviderVideoRef): Promise<void> {
     const prefix = `${CloudflareR2Adapter.folderOf(ref.providerVideoId)}/`;
     if (!prefix.startsWith("videos/")) {
@@ -330,6 +393,18 @@ export class CloudflareR2Adapter implements VideoProviderAdapter {
       if (err instanceof ProviderError) throw err;
       throw new ProviderError(`R2 ${op} falló`, { cause: err, retryable: true });
     }
+  }
+}
+
+/** Calidades MP4 descargables generadas por el worker (`providerMeta.downloads`). */
+function renditionsOf(ref: ProviderVideoRef): { h: number; bytes: number }[] {
+  const raw = ref.providerMeta?.downloads;
+  if (typeof raw !== "string") return [];
+  try {
+    const list = JSON.parse(raw) as { h: number; bytes: number }[];
+    return list.filter((r) => Number.isInteger(r.h) && r.h > 0).sort((a, b) => b.h - a.h);
+  } catch {
+    return [];
   }
 }
 

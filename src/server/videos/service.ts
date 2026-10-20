@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { HttpError } from "../http";
 import { getActiveAdapter, getAdapter, getConfiguredAdapters } from "../video-providers/factory";
 import type {
+  DownloadResult,
   PlaybackSource,
   ProviderMeta,
   ProviderVideoRef,
@@ -20,7 +21,7 @@ import type {
   WebhookRequest,
 } from "../video-providers/types";
 import { toPublicVideo, type PublicVideo } from "./dto";
-import { mediaPath, type MediaAsset } from "./playback-token";
+import { mediaPath } from "./playback-token";
 
 /** Reutilización de URLs firmadas: una vista = render + source + poster. */
 const PLAYBACK_CACHE_MS = 60_000;
@@ -127,6 +128,11 @@ export async function applyState(video: Video, state: ProviderVideoState): Promi
   if (RANK[state.status] < RANK[video.status]) return video;
 
   const meta = { ...((video.providerMeta as ProviderMeta | null) ?? {}), ...state.providerMeta };
+  if (state.status === "READY" && video.status !== "READY") {
+    // Hook del proveedor (p. ej. Stream prepara el MP4 descargable). Sin bloquear.
+    const adapter = getAdapter(video.provider);
+    adapter.onReady?.(refOf(video)).catch((err) => console.warn("[videos] onReady falló:", err));
+  }
   return prisma.video.update({
     where: { id: video.id },
     data: {
@@ -200,7 +206,7 @@ async function findOwned(userId: string, publicId: string): Promise<Video> {
 export async function updateVideo(
   userId: string,
   publicId: string,
-  patch: { title?: string; folderId?: string | null },
+  patch: { title?: string; folderId?: string | null; allowDownload?: boolean },
 ): Promise<PublicVideo> {
   const video = await findOwned(userId, publicId);
   if (patch.folderId) await findOwnedFolder(userId, patch.folderId);
@@ -209,6 +215,7 @@ export async function updateVideo(
     data: {
       ...(patch.title !== undefined && { title: patch.title }),
       ...(patch.folderId !== undefined && { folderId: patch.folderId }),
+      ...(patch.allowDownload !== undefined && { allowDownload: patch.allowDownload }),
     },
   });
   return toPublicVideo(updated);
@@ -289,7 +296,24 @@ export type EmbedLookup =
   | { state: "not_found" }
   | { state: "processing"; title: string }
   | { state: "error"; title: string }
-  | { state: "ready"; title: string; durationSec: number | null; source: PlaybackSource };
+  | {
+      state: "ready";
+      publicId: string;
+      title: string;
+      durationSec: number | null;
+      source: PlaybackSource;
+      /** Vacío si el dueño (o la configuración global) no permite descargar. */
+      downloads: PublicDownloadOption[];
+    };
+
+export interface PublicDownloadOption {
+  label: string;
+  sizeBytes: number | null;
+  /** Ruta propia firmada: `/media/<id>/download?q=<calidad>&…` */
+  path: string;
+}
+
+const downloadsEnabled = (v: Video) => v.allowDownload && getCoreEnv().ALLOW_DOWNLOADS;
 
 /**
  * Datos para el reproductor. Las URLs devueltas son rutas PROPIAS firmadas
@@ -304,8 +328,15 @@ export async function getEmbedPlayback(publicId: string): Promise<EmbedLookup> {
   // El adaptador decide formato (HLS/MP4) y si hay miniatura; nosotros
   // sustituimos sus URLs por rutas propias antes de enviarlas al navegador.
   const real = await providerPlayback(video);
+  const downloads = downloadsEnabled(video)
+    ? getAdapter(video.provider)
+        .listDownloadOptions(refOf(video), Number(video.sizeBytes))
+        .map((o) => ({ label: o.label, sizeBytes: o.sizeBytes ?? null, path: mediaPath(publicId, "download", o.id) }))
+    : [];
   return {
     state: "ready",
+    publicId,
+    downloads,
     title: video.title,
     durationSec: video.durationSec,
     source: {
@@ -329,8 +360,15 @@ async function providerPlayback(video: Video): Promise<PlaybackSource> {
   return source;
 }
 
+/** Resuelve la descarga: URL directa del proveedor (el VPS solo redirige). */
+export async function resolveDownload(publicId: string, optionId: string): Promise<DownloadResult | null> {
+  const video = await prisma.video.findUnique({ where: { publicId } });
+  if (!video || video.status !== "READY" || !downloadsEnabled(video)) return null;
+  return getAdapter(video.provider).getDownloadUrl(refOf(video), video.title, optionId);
+}
+
 /** Resuelve la URL real (firmada) del proveedor para la ruta `/media`. */
-export async function resolveMediaUrl(publicId: string, asset: MediaAsset): Promise<string | null> {
+export async function resolveMediaUrl(publicId: string, asset: "source" | "poster"): Promise<string | null> {
   const video = await prisma.video.findUnique({ where: { publicId } });
   if (!video || video.status !== "READY") return null;
   const source = await providerPlayback(video);

@@ -222,6 +222,16 @@ export function DashboardApp({
             }
           },
         }),
+      setAllowDownload: async (v, allow) => {
+        setVideos((prev) => prev.map((x) => (x.id === v.id ? { ...x, allowDownload: allow } : x)));
+        try {
+          await api(`/api/videos/${v.id}`, { method: "PATCH", body: JSON.stringify({ allowDownload: allow }) });
+          notify(allow ? "Descarga activada" : "Descarga desactivada");
+        } catch (err) {
+          setVideos((prev) => prev.map((x) => (x.id === v.id ? { ...x, allowDownload: !allow } : x)));
+          notify((err as Error).message);
+        }
+      },
       remove: (v) =>
         setDialog({
           kind: "confirm",

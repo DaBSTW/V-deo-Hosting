@@ -9,14 +9,15 @@
  * Requiere `ffmpeg` y `ffprobe` en el PATH del VPS (o del contenedor worker).
  */
 import { spawn } from "node:child_process";
-import { createWriteStream } from "node:fs";
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { createReadStream, createWriteStream } from "node:fs";
+import { mkdir, mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import type { Video } from "@prisma/client";
+import { getR2Env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { CloudflareR2Adapter } from "./CloudflareR2Adapter";
 import { getAdapter } from "./factory";
@@ -31,6 +32,7 @@ const LADDER = [
 ];
 
 const CONTENT_TYPES: Record<string, string> = {
+  ".mp4": "video/mp4",
   ".m3u8": "application/vnd.apple.mpegurl",
   ".ts": "video/mp2t",
   ".jpg": "image/jpeg",
@@ -58,7 +60,16 @@ export async function processNextHlsJob(log = console): Promise<boolean> {
   try {
     const result = await transcode(candidate);
     // No pisamos una miniatura previa (p. ej. la del navegador) si ffmpeg no generó una.
-    await finish(candidate, { hls: true, ...(result.poster ? { poster: true } : {}) }, result.durationSec);
+    await finish(
+      candidate,
+      {
+        hls: true,
+        sourceHeight: result.sourceHeight,
+        ...(result.poster ? { poster: true } : {}),
+        ...(result.downloads.length ? { downloads: JSON.stringify(result.downloads) } : {}),
+      },
+      result.durationSec,
+    );
     log.info(`[hls] ${candidate.publicId} listo en ${((Date.now() - started) / 1000).toFixed(0)}s`);
   } catch (err) {
     log.error(`[hls] ${candidate.publicId} falló:`, err);
@@ -83,7 +94,15 @@ async function finish(video: Video, meta: ProviderMeta, durationSec?: number | n
   });
 }
 
-async function transcode(video: Video): Promise<{ durationSec: number | null; poster: boolean }> {
+interface TranscodeResult {
+  durationSec: number | null;
+  poster: boolean;
+  sourceHeight: number;
+  /** MP4 descargables por calidad: [{ h: 720, bytes: 123 }, …] */
+  downloads: { h: number; bytes: number }[];
+}
+
+async function transcode(video: Video): Promise<TranscodeResult> {
   const adapter = getAdapter("R2") as CloudflareR2Adapter;
   const folder = CloudflareR2Adapter.folderOf(video.providerVideoId);
   const work = await mkdtemp(path.join(tmpdir(), "hls-"));
@@ -136,26 +155,50 @@ async function transcode(video: Video): Promise<{ durationSec: number | null; po
       "-frames:v", "1", "-vf", "scale=-2:720", "-q:v", "3", posterPath,
     ]).then(() => true, () => false);
 
-    // 5) Subir a R2
+    // 5) MP4 descargables por calidad: re-empaquetado SIN recodificar
+    //    (copia de streams desde el HLS recién generado → CPU casi nula).
+    const downloads: { h: number; bytes: number; file: string }[] = [];
+    if (getR2Env().R2_HLS_DOWNLOAD_RENDITIONS) {
+      const dlDir = path.join(work, "downloads");
+      await mkdir(dlDir, { recursive: true });
+      for (const [i, r] of renditions.entries()) {
+        const file = path.join(dlDir, `${r.height}p.mp4`);
+        const ok = await run("ffmpeg", [
+          "-hide_banner", "-loglevel", "error", "-y", "-i", path.join(out, String(i), "index.m3u8"),
+          "-c", "copy", "-bsf:a", "aac_adtstoasc", "-movflags", "+faststart", file,
+        ]).then(() => true, () => false);
+        if (ok) downloads.push({ h: r.height, bytes: (await stat(file)).size, file });
+      }
+    }
+
+    // 6) Subir a R2
     const files = (await readdir(out, { recursive: true, withFileTypes: true }))
       .filter((d) => d.isFile())
       .map((d) => path.join(d.parentPath, d.name));
     const uploads = files.map((file) => ({ file, key: `${folder}/hls/${path.relative(out, file).split(path.sep).join("/")}` }));
     if (poster) uploads.push({ file: posterPath, key: `${folder}/poster.jpg` });
+    for (const d of downloads) uploads.push({ file: d.file, key: `${folder}/downloads/${d.h}p.mp4` });
 
     await mapLimit(uploads, 8, async ({ file, key }) => {
       await adapter.client.send(
         new PutObjectCommand({
           Bucket: adapter.bucket,
           Key: key,
-          Body: await readFile(file),
+          // Streaming desde disco: no carga archivos grandes en memoria.
+          Body: createReadStream(file),
+          ContentLength: (await stat(file)).size,
           ContentType: CONTENT_TYPES[path.extname(file)] ?? "application/octet-stream",
           CacheControl: "public, max-age=31536000, immutable",
         }),
       );
     });
 
-    return { durationSec: probe.durationSec, poster };
+    return {
+      durationSec: probe.durationSec,
+      poster,
+      sourceHeight: probe.height,
+      downloads: downloads.map(({ h, bytes }) => ({ h, bytes })),
+    };
   } finally {
     await rm(work, { recursive: true, force: true });
   }

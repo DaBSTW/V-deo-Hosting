@@ -62,6 +62,26 @@ export function VideoModal({
             </select>
           </label>
 
+          <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-zinc-200 px-3.5 py-3">
+            <span>
+              <span className="block text-sm font-medium text-zinc-800">Permitir descarga</span>
+              <span className="block text-xs text-zinc-500">Muestra el botón «Descargar» en el enlace directo.</span>
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={video.allowDownload}
+              onClick={() => actions.setAllowDownload(video, !video.allowDownload)}
+              className={`relative h-6 w-11 shrink-0 rounded-full transition ${video.allowDownload ? "bg-brand-600" : "bg-zinc-300"}`}
+            >
+              <span
+                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${
+                  video.allowDownload ? "left-[22px]" : "left-0.5"
+                }`}
+              />
+            </button>
+          </label>
+
           <CopyField label="Código de inserción" value={video.iframe} multiline disabled={!ready} onCopy={() => actions.copyIframe(video)} icon={<CodeIcon />} />
           <CopyField label="Enlace directo" value={video.watchUrl} disabled={!ready} onCopy={() => actions.copyLink(video)} icon={<LinkIcon />} />
 

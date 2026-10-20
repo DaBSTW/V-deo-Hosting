@@ -23,10 +23,14 @@ const patchSchema = z
   .object({
     title: z.string().trim().min(1, "El título es obligatorio").max(200).optional(),
     folderId: z.string().max(40).nullable().optional(),
+    allowDownload: z.boolean().optional(),
   })
-  .refine((v) => v.title !== undefined || v.folderId !== undefined, "Nada que actualizar");
+  .refine((v) => Object.values(v).some((x) => x !== undefined), "Nada que actualizar");
 
-/** PATCH /api/videos/:publicId — renombrar o mover a otra carpeta (`folderId: null` = sin carpeta). */
+/**
+ * PATCH /api/videos/:publicId — renombrar, mover de carpeta (`folderId: null` =
+ * sin carpeta) o activar/desactivar la descarga pública (`allowDownload`).
+ */
 export const PATCH = route<Ctx>(async (req, ctx) => {
   const user = await requireApiUser();
   const patch = patchSchema.parse(await readJson(req));

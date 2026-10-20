@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
+import { WatchActions } from "@/components/watch/WatchActions";
 import { APP_NAME } from "@/lib/brand";
 import { formatDuration } from "@/lib/format";
+import { embedUrlFor } from "@/server/videos/dto";
 import { EmbedBody, loadEmbed } from "@/server/videos/embed-view";
+import { getCoreEnv } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -12,9 +15,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title: data.title, robots: { index: false, follow: false } };
 }
 
-/** /v/:publicId — enlace directo para compartir (página con el reproductor). */
+/** /v/:publicId — enlace directo para compartir: reproductor, descarga e inserción. */
 export default async function WatchPage({ params }: Props) {
-  const data = await loadEmbed((await params).publicId);
+  const { publicId } = await params;
+  const data = await loadEmbed(publicId);
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <header className="mx-auto max-w-5xl px-4 py-4 text-sm font-semibold tracking-tight text-zinc-400 sm:px-6">
@@ -28,6 +32,14 @@ export default async function WatchPage({ params }: Props) {
         {data.state === "ready" && data.durationSec ? (
           <p className="mt-1 text-sm text-zinc-500">{formatDuration(data.durationSec)}</p>
         ) : null}
+        {data.state === "ready" && (
+          <WatchActions
+            title={data.title}
+            watchUrl={`${getCoreEnv().APP_URL}/v/${publicId}`}
+            embedUrl={embedUrlFor(publicId)}
+            downloads={data.downloads}
+          />
+        )}
       </main>
     </div>
   );

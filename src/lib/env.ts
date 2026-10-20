@@ -67,6 +67,8 @@ const coreSchema = z.object({
   /** Orígenes autorizados a incrustar el reproductor (`*` = cualquiera). */
   EMBED_ALLOWED_ORIGINS: z.string().default("*"),
   ALLOW_REGISTRATION: bool(true),
+  /** Interruptor global de descargas (además del permiso por video). */
+  ALLOW_DOWNLOADS: bool(true),
 });
 export const getCoreEnv = memo(() => parse("core", coreSchema));
 
@@ -91,6 +93,12 @@ const r2Schema = z
     R2_MEDIA_TRANSFORMATIONS: bool(false),
     /** Activa la generación de HLS multi-calidad con el worker (ffmpeg). */
     R2_HLS_ENABLED: bool(false),
+    /**
+     * Además del HLS, deja un MP4 por calidad para descargar. Se obtiene
+     * re-empaquetando (`-c copy`) lo ya codificado: CPU casi nula, pero
+     * ocupa espacio extra en R2.
+     */
+    R2_HLS_DOWNLOAD_RENDITIONS: bool(true),
     /** Secreto HMAC del Worker que reenvía las notificaciones de eventos R2. */
     R2_WEBHOOK_SECRET: optionalString,
   })

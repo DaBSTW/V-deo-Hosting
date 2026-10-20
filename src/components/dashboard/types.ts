@@ -13,6 +13,7 @@ export interface VideoActions {
   rename: (v: PublicVideo) => void;
   move: (ids: string[], folderId: string | null) => void;
   remove: (v: PublicVideo) => void;
+  setAllowDownload: (v: PublicVideo, allow: boolean) => void;
 }
 
 /** Tipo MIME propio para arrastrar videos hacia carpetas. */
