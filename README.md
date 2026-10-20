@@ -92,6 +92,10 @@ workers/r2-event-forwarder               (opcional) Worker: eventos R2 → webho
 | `GET`    | `/api/admin/payouts`         | (admin) Cola de pagos |
 | `PATCH`  | `/api/admin/payouts/:id`     | (admin) `approve` / `pay` (con referencia) / `reject` (con motivo) |
 | `GET`    | `/sw.js`                     | Service worker de Monetag (formato Push) |
+| `GET`/`POST` | `/api/kyc`               | Estado / envío (multipart) de la verificación de identidad |
+| `GET`    | `/api/admin/kyc`             | (admin) Verificaciones por estado |
+| `PATCH`  | `/api/admin/kyc/:id`         | (admin) `approve` / `reject` (con motivo) |
+| `GET`    | `/api/admin/kyc/:id/file/:kind` | (admin) Documento descifrado (`front`, `back`, `selfie`) |
 | `GET`    | `/api/folders`               | Carpetas del usuario |
 | `POST`   | `/api/folders`               | `{ name }` → crear carpeta |
 | `PATCH`  | `/api/folders/:id`           | `{ name }` → renombrar |
@@ -181,6 +185,29 @@ El usuario elige un método (PayPal, USDT TRC20, Payoneer o transferencia, cada 
 solicita el cobro de todo su saldo disponible. En Administración apruebas, envías el pago por tu cuenta
 y lo marcas como **pagado** con la referencia. Si lo **rechazas** (con un motivo visible para el
 usuario), el importe vuelve a su saldo automáticamente.
+
+### Verificación de identidad (antes del primer cobro)
+
+Nadie puede cobrar sin la identidad verificada (lo comprueban la solicitud de pago y también la aprobación del administrador).
+Al pulsar «Solicitar pago» por primera vez se abre el formulario:
+
+* Nombre legal, fecha de nacimiento (**mayor de 18**), país, tipo y número de documento.
+* Fotos del **frente**, **dorso** (no se pide con pasaporte) y una **selfie con el documento**.
+* El navegador recomprime las fotos a JPEG de 2.000 px como máximo, lo que **elimina los metadatos EXIF (GPS incluido)**.
+  El servidor comprueba la firma real del archivo (JPG/PNG/WebP, ≤ 6 MB).
+* Las imágenes y el número de documento se guardan **cifrados con AES-256-GCM** (`KYC_ENCRYPTION_KEY`) en
+  `KYC_STORAGE_DIR` del VPS. **Nunca en el bucket de videos**, que puede estar expuesto por un dominio público.
+  Sin la clave son ilegibles: **haz copia de la clave**, porque si se pierde no se pueden recuperar.
+* En **Administración → Verificaciones de identidad** ves los datos y las fotos (se descifran solo para
+  administradores, con `Cache-Control: no-store`), y apruebas o rechazas con un motivo que ve el usuario.
+  El usuario puede reenviarla.
+* En la cola de pagos aparece el **nombre verificado** junto al destino: comprueba que coincida con el titular de
+  la cuenta de PayPal o del banco.
+* `npm run kyc:purge` (con un cron diario) borra las imágenes `KYC_RETENTION_DAYS` días después de la decisión.
+  Se conserva el registro (nombre, país, tipo, últimos 4 dígitos y decisión).
+
+El **mínimo de retiro es de 25 USD** en todos los métodos (`MIN_PAYOUT_USD`). El administrador puede subirlo
+por método, pero no bajarlo de 25.
 
 ### Cómo fijar las tarifas sin perder dinero
 

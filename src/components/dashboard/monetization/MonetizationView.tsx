@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { formatCount, formatDate, formatMicros, formatUsd } from "@/lib/format";
+import { formatCount, formatDate, formatMicros, formatRelative, formatUsd } from "@/lib/format";
 import type { MonetizationOverview } from "@/server/monetization/earnings";
 import { AlertIcon, CheckIcon, ClockIcon, CoinsIcon, LockIcon, ShieldIcon, WalletIcon } from "../../ui/icons";
 import { ColumnChart } from "../overview/ColumnChart";
+import { KycDialog } from "./KycDialog";
 import { Card, CardTitle, inputCls, Kpi, PayoutBadge, Segmented, Switch } from "./ui";
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
@@ -31,6 +32,7 @@ export function MonetizationView({
   const [method, setMethod] = useState("");
   const [details, setDetails] = useState("");
   const [saving, setSaving] = useState(false);
+  const [kycOpen, setKycOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -73,7 +75,9 @@ export function MonetizationView({
     }
   };
 
-  const requestPayout = () =>
+  const requestPayout = () => {
+    // Primer cobro sin identidad verificada → se pide la verificación.
+    if (data.canRequest.needsKyc) return setKycOpen(true);
     confirm({
       title: "Solicitar pago",
       message: `Vas a solicitar el cobro de ${formatMicros(data.balance.availableMicros)} mediante ${
@@ -89,6 +93,7 @@ export function MonetizationView({
         }
       },
     });
+  };
 
   const selected = data.methods.find((m) => m.id === method);
   const b = data.balance;
@@ -116,7 +121,7 @@ export function MonetizationView({
         <Kpi accent icon={<WalletIcon />} label="Saldo disponible" value={formatMicros(b.availableMicros)} hint={data.canRequest.ok ? "Listo para cobrar" : data.canRequest.reason}>
           <button
             onClick={requestPayout}
-            disabled={!data.canRequest.ok}
+            disabled={!data.canRequest.ok && !data.canRequest.needsKyc}
             className="mt-4 w-full rounded-xl bg-white px-3 py-2 text-sm font-semibold text-brand-700 transition hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Solicitar pago
@@ -139,6 +144,19 @@ export function MonetizationView({
           <Switch checked={data.userEnabled} onChange={toggle} label="Monetizar mis videos" />
         </div>
       </Card>
+
+      {/* Verificación de identidad */}
+      <KycCard kyc={data.kyc} onVerify={() => setKycOpen(true)} />
+      <KycDialog
+        open={kycOpen}
+        firstPayout={data.canRequest.needsKyc}
+        onClose={() => setKycOpen(false)}
+        onSubmitted={() => {
+          setKycOpen(false);
+          notify("Verificación enviada. Te avisaremos cuando esté revisada.");
+          void load();
+        }}
+      />
 
       {/* Gráfica */}
       <Card>
@@ -314,6 +332,36 @@ export function MonetizationView({
         </ul>
       </Card>
     </div>
+  );
+}
+
+function KycCard({ kyc, onVerify }: { kyc: MonetizationOverview["kyc"]; onVerify: () => void }) {
+  const view = {
+    NONE: { tone: "bg-zinc-100 text-zinc-600", label: "Sin verificar", text: "Se te pedirá al solicitar tu primer pago. Puedes hacerlo ya para cobrar sin esperas.", action: "Verificar ahora" },
+    PENDING: { tone: "bg-amber-50 text-amber-700", label: "En revisión", text: `Enviada ${kyc.submittedAt ? formatRelative(kyc.submittedAt) : ""}. Normalmente la revisamos en 1-2 días hábiles.`, action: null },
+    APPROVED: { tone: "bg-emerald-50 text-emerald-700", label: "Verificada", text: `Identidad confirmada${kyc.fullName ? ` a nombre de ${kyc.fullName}` : ""}. Ya puedes cobrar.`, action: null },
+    REJECTED: { tone: "bg-red-50 text-red-700", label: "Rechazada", text: kyc.note ? `Motivo: ${kyc.note}` : "Revisa tus datos y vuelve a enviarla.", action: "Enviar de nuevo" },
+  }[kyc.status];
+  return (
+    <Card>
+      <div className="flex flex-wrap items-center gap-4">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+          <ShieldIcon className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-zinc-900">Verificación de identidad</h2>
+            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${view.tone}`}>{view.label}</span>
+          </div>
+          <p className="mt-0.5 text-xs text-zinc-500">{view.text}</p>
+        </div>
+        {view.action && (
+          <button onClick={onVerify} className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800">
+            {view.action}
+          </button>
+        )}
+      </div>
+    </Card>
   );
 }
 

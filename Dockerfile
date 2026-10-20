@@ -27,6 +27,8 @@ COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/node_modules/prisma ./node_modules/prisma
 COPY --from=build /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
+# Documentos de identidad cifrados (montar como volumen persistente).
+RUN mkdir -p /app/storage/kyc && chown -R node:node /app/storage
 USER node
 EXPOSE 3000
 # Aplica migraciones pendientes y arranca.

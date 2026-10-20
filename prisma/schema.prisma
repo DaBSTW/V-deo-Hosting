@@ -53,6 +53,9 @@ model User {
   payoutDetails       String?
   earnings            EarningDaily[]
   payouts             Payout[]
+  /// Estado de la verificación de identidad (requisito para cobrar).
+  kycStatus           KycStatus      @default(NONE)
+  verifications       IdentityVerification[]
 }
 
 /// Carpetas del usuario para organizar sus videos (un nivel, sin anidar).
@@ -182,4 +185,42 @@ model PlatformSetting {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+enum KycStatus {
+  NONE // nunca enviada
+  PENDING // enviada, en revisión
+  APPROVED // identidad verificada: puede cobrar
+  REJECTED // rechazada: puede volver a enviarla
+}
+
+/// Solicitud de verificación de identidad. Los documentos se guardan CIFRADOS
+/// (AES-256-GCM) fuera de la DB; aquí solo sus claves de almacenamiento.
+model IdentityVerification {
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status            KycStatus @default(PENDING)
+  fullName          String
+  birthDate         DateTime  @db.Date
+  /// ISO 3166-1 alfa-2
+  country           String
+  /// ID_CARD | PASSPORT | DRIVER_LICENSE
+  documentType      String
+  /// Número de documento cifrado (base64).
+  documentNumberEnc String
+  /// Últimos 4 caracteres, para mostrar sin descifrar.
+  documentLast4     String
+  /// Claves de almacenamiento: { front, back?, selfie }
+  files             Json
+  /// Motivo del rechazo (visible para el usuario).
+  note              String?
+  reviewedBy        String?
+  reviewedAt        DateTime?
+  /// Cuándo se borraron las imágenes (política de retención).
+  filesPurgedAt     DateTime?
+  createdAt         DateTime  @default(now())
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
 }

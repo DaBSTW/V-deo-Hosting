@@ -21,6 +21,9 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql://vidhost:${POSTGRES_PASSWORD:-change-me}@db:5432/vidhost?schema=public
+    volumes:
+      # Documentos de identidad (cifrados). Inclúyelo en tus copias de seguridad.
+      - kyc:/app/storage/kyc
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
@@ -39,3 +42,4 @@ services:
 
 volumes:
   pgdata:
+  kyc:

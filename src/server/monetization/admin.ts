@@ -51,11 +51,21 @@ export async function listPayouts(status?: PayoutStatus) {
     where: status ? { status } : { status: { in: ["PENDING", "APPROVED"] } },
     orderBy: { createdAt: "asc" },
     take: 200,
-    include: { user: { select: { email: true } } },
+    include: {
+      user: {
+        select: {
+          email: true,
+          kycStatus: true,
+          verifications: { where: { status: "APPROVED" }, orderBy: { createdAt: "desc" }, take: 1, select: { fullName: true } },
+        },
+      },
+    },
   });
   return rows.map((p) => ({
     id: p.id,
     email: p.user.email,
+    /** Nombre verificado: compáralo con el titular de la cuenta de destino. */
+    verifiedName: p.user.kycStatus === "APPROVED" ? (p.user.verifications[0]?.fullName ?? null) : null,
     amountMicros: num(p.amountMicros),
     method: p.method,
     details: p.details,
@@ -76,6 +86,11 @@ export async function processPayout(id: string, action: keyof typeof TRANSITIONS
   const t = TRANSITIONS[action];
   if (action === "pay" && !reference?.trim()) throw new HttpError(400, "Indica la referencia del pago (id de transacción)");
   if (action === "reject" && !note?.trim()) throw new HttpError(400, "Indica el motivo del rechazo");
+  // Defensa en profundidad: nunca aprobar ni pagar a alguien sin identidad verificada.
+  if (action !== "reject") {
+    const p = await prisma.payout.findUnique({ where: { id }, select: { user: { select: { kycStatus: true } } } });
+    if (p && p.user.kycStatus !== "APPROVED") throw new HttpError(409, "El usuario no tiene la identidad verificada");
+  }
   // Transición atómica: solo si el pago sigue en un estado de origen válido.
   const { count } = await prisma.payout.updateMany({
     where: { id, status: { in: t.from } },

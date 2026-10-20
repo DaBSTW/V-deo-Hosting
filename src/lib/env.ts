@@ -71,6 +71,15 @@ const coreSchema = z.object({
   ALLOW_DOWNLOADS: bool(true),
   /** Cuota de almacenamiento por usuario en GB (0 = sin límite). */
   STORAGE_QUOTA_GB: z.coerce.number().min(0).default(0),
+  /** Clave AES-256 (32 bytes en base64) para cifrar los documentos de identidad. */
+  KYC_ENCRYPTION_KEY: z
+    .string()
+    .optional()
+    .refine((v) => !v || Buffer.from(v, "base64").length === 32, "KYC_ENCRYPTION_KEY debe ser 32 bytes en base64 (openssl rand -base64 32)"),
+  /** Carpeta del VPS donde se guardan los documentos cifrados. */
+  KYC_STORAGE_DIR: z.string().default("./storage/kyc"),
+  /** Días que se conservan las imágenes tras la decisión (luego se borran). */
+  KYC_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
   /** Emails con acceso al panel de administración (separados por comas). */
   ADMIN_EMAILS: z
     .string()

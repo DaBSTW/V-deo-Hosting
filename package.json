@@ -12,7 +12,8 @@
     "db:migrate:dev": "prisma migrate dev",
     "worker:hls": "tsx scripts/hls-worker.ts",
     "cleanup:stale": "tsx scripts/cleanup-stale-uploads.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "kyc:purge": "tsx scripts/purge-kyc-documents.ts"
   },
   "engines": {
     "node": ">=20.9.0"

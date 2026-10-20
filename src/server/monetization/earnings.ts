@@ -12,6 +12,7 @@ import { HttpError } from "../http";
 import { flushStats } from "../videos/stats-buffer";
 import { getMonetizationSettings, PAYOUT_METHODS, type PayoutMethod } from "./settings";
 import { TIER_COUNTRIES, TIER_LABELS, TIERS, type Tier } from "./tiers";
+import { getKycStatus } from "../kyc/service";
 
 const DAY = 86_400_000;
 const utcToday = () => {
@@ -23,10 +24,13 @@ const num = (v: bigint | number | null | undefined) => Number(v ?? 0);
 
 export interface MonetizationOverview {
   platformEnabled: boolean;
+  /** Estado de la verificación de identidad (obligatoria para cobrar). */
+  kyc: Awaited<ReturnType<typeof getKycStatus>>;
   userEnabled: boolean;
   payout: { method: PayoutMethod | null; details: string | null };
   balance: { availableMicros: number; heldMicros: number; monthMicros: number; paidMicros: number; lifetimeMicros: number };
-  canRequest: { ok: boolean; reason: string | null; minUsd: number | null };
+  /** `needsKyc`: todo lo demás está listo y solo falta verificar la identidad. */
+  canRequest: { ok: boolean; reason: string | null; minUsd: number | null; needsKyc: boolean };
   daily: { date: string; amountMicros: number; views: number }[];
   byTier: { tier: Tier; label: string; countries: string; views: number; amountMicros: number; rateUsd: number }[];
   topVideos: { id: string; title: string; paidViews: number }[];
@@ -59,9 +63,10 @@ async function balanceOf(tx: Prisma.TransactionClient, userId: string, holdDays:
 
 export async function getMonetizationOverview(userId: string): Promise<MonetizationOverview> {
   await flushStats();
-  const [settings, user] = await Promise.all([
+  const [settings, user, kyc] = await Promise.all([
     getMonetizationSettings(),
     prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { monetizationEnabled: true, payoutMethod: true, payoutDetails: true } }),
+    getKycStatus(userId),
   ]);
   const { openPayout, ...balance } = await balanceOf(prisma, userId, settings.holdDays);
 
@@ -106,14 +111,24 @@ export async function getMonetizationOverview(userId: string): Promise<Monetizat
           ? "Ya tienes un pago en curso."
           : balance.availableMicros < (minUsd ?? 0) * 1e6
             ? `El mínimo para cobrar con ${PAYOUT_METHODS[method].label} es ${minUsd} USD.`
-            : null;
+            : kyc.status === "PENDING"
+              ? "Tu verificación de identidad está en revisión."
+              : kyc.status !== "APPROVED"
+                ? "Verifica tu identidad para cobrar."
+                : null;
 
   return {
     platformEnabled: settings.enabled,
+    kyc,
     userEnabled: user.monetizationEnabled,
     payout: { method, details: user.payoutDetails },
     balance,
-    canRequest: { ok: reason === null, reason, minUsd },
+    canRequest: {
+      ok: reason === null,
+      reason,
+      minUsd,
+      needsKyc: reason === "Verifica tu identidad para cobrar.",
+    },
     daily,
     byTier: TIERS.map((t) => ({ tier: t, label: TIER_LABELS[t], countries: TIER_COUNTRIES[t], ...tierAgg[t], rateUsd: settings.rates[t] })),
     topVideos: top.map((t) => ({ id: t.publicId, title: t.title, paidViews: num(t.paid) })),
@@ -174,6 +189,10 @@ export async function requestPayout(userId: string) {
       if (!method || !user.payoutDetails || !cfg?.enabled) throw new HttpError(400, "Configura un método de cobro válido");
       if (openPayout) throw new HttpError(409, "Ya tienes un pago en curso");
       if (availableMicros < cfg.minUsd * 1e6) throw new HttpError(400, `El mínimo para cobrar es ${cfg.minUsd} USD`);
+      // Identidad verificada obligatoria (se pide al solicitar el primer pago).
+      if (user.kycStatus !== "APPROVED") {
+        throw new HttpError(403, user.kycStatus === "PENDING" ? "Tu verificación de identidad está en revisión" : "Verifica tu identidad antes de cobrar");
+      }
       return tx.payout.create({
         data: { userId, amountMicros: BigInt(availableMicros), method, details: user.payoutDetails },
       });

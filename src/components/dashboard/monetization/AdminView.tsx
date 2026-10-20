@@ -20,12 +20,34 @@ interface Summary {
 interface AdminPayout {
   id: string;
   email: string;
+  verifiedName: string | null;
   amountMicros: number;
   method: string;
   details: string;
   status: string;
   createdAt: string;
 }
+
+interface Verification {
+  id: string;
+  email: string;
+  payout: string | null;
+  fullName: string;
+  birthDate: string;
+  country: string;
+  documentType: string;
+  documentNumber: string;
+  files: ("front" | "back" | "selfie")[];
+  createdAt: string;
+}
+
+const DOC_LABELS: Record<string, string> = { ID_CARD: "Documento de identidad", PASSPORT: "Pasaporte", DRIVER_LICENSE: "Licencia de conducir" };
+const FILE_LABELS = { front: "Frente", back: "Dorso", selfie: "Selfie" } as const;
+const ageOf = (iso: string) => {
+  const b = new Date(`${iso}T00:00:00Z`);
+  const n = new Date();
+  return n.getUTCFullYear() - b.getUTCFullYear() - (n.getUTCMonth() < b.getUTCMonth() || (n.getUTCMonth() === b.getUTCMonth() && n.getUTCDate() < b.getUTCDate()) ? 1 : 0);
+};
 
 const METHOD_LABELS: Record<PayoutMethod, string> = {
   PAYPAL: "PayPal",
@@ -46,15 +68,19 @@ export function AdminView({ notify, openDialog }: { notify: (msg: string) => voi
   const [settings, setSettings] = useState<MonetizationSettings | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [payouts, setPayouts] = useState<AdminPayout[]>([]);
+  const [kyc, setKyc] = useState<Verification[]>([]);
+  const [viewer, setViewer] = useState<{ src: string; title: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [a, p] = await Promise.all([
+      const [a, p, k] = await Promise.all([
         call<{ settings: MonetizationSettings; summary: Summary }>("/api/admin/monetization"),
         call<{ payouts: AdminPayout[] }>("/api/admin/payouts"),
+        call<{ verifications: Verification[] }>("/api/admin/kyc"),
       ]);
+      setKyc(k.verifications);
       setSettings(a.settings);
       setSummary(a.summary);
       setPayouts(p.payouts);
@@ -109,6 +135,29 @@ export function AdminView({ notify, openDialog }: { notify: (msg: string) => voi
     }
   };
 
+  const review = async (v: Verification, action: "approve" | "reject", note?: string) => {
+    try {
+      const r = await call<{ verifications: Verification[] }>(`/api/admin/kyc/${v.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action, note }),
+      });
+      setKyc(r.verifications);
+      notify(action === "approve" ? `Identidad de ${v.fullName} verificada` : "Verificación rechazada");
+      void call<{ payouts: AdminPayout[] }>("/api/admin/payouts").then((p) => setPayouts(p.payouts));
+      return true;
+    } catch (err) {
+      notify((err as Error).message);
+      return false;
+    }
+  };
+  const regionName = (c: string) => {
+    try {
+      return new Intl.DisplayNames(["es"], { type: "region" }).of(c) ?? c;
+    } catch {
+      return c;
+    }
+  };
+
   const num = (v: string) => (v === "" ? 0 : Number(v.replace(",", ".")));
 
   return (
@@ -119,6 +168,79 @@ export function AdminView({ notify, openDialog }: { notify: (msg: string) => voi
         <Kpi icon={<CoinsIcon />} label="Generado (7 días)" value={formatMicros(summary.earnedWeekMicros)} hint={`Hoy ${formatMicros(summary.earnedTodayMicros)} · ${formatCount(summary.paidViewsWeek)} vistas monetizadas`} />
         <Kpi icon={<LockIcon />} label="Pagado este mes" value={formatMicros(summary.paidThisMonthMicros)} />
       </div>
+
+      {/* Verificaciones de identidad */}
+      <Card>
+        <CardTitle title="Verificaciones de identidad" subtitle="Comprueba que el documento sea legible, que la selfie coincida y que el nombre coincida con el titular del método de cobro" />
+        {kyc.length === 0 ? (
+          <p className="py-8 text-center text-sm text-zinc-500">No hay verificaciones pendientes.</p>
+        ) : (
+          <ul className="divide-y divide-zinc-100">
+            {kyc.map((v) => (
+              <li key={v.id} className="grid gap-4 py-4 lg:grid-cols-[minmax(0,1fr)_auto]">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">{v.fullName}</p>
+                  <p className="text-xs text-zinc-500">{v.email} · enviada {formatDate(v.createdAt)}</p>
+                  <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
+                    <div><dt className="text-zinc-400">Nacimiento</dt><dd>{v.birthDate} ({ageOf(v.birthDate)} años)</dd></div>
+                    <div><dt className="text-zinc-400">País</dt><dd>{regionName(v.country)}</dd></div>
+                    <div><dt className="text-zinc-400">{DOC_LABELS[v.documentType] ?? v.documentType}</dt><dd className="font-mono">{v.documentNumber}</dd></div>
+                    <div><dt className="text-zinc-400">Cobro</dt><dd className="truncate" title={v.payout ?? ""}>{v.payout ?? "—"}</dd></div>
+                  </dl>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {v.files.map((f) => {
+                      const src = `/api/admin/kyc/${v.id}/file/${f}`;
+                      return (
+                        <button
+                          key={f}
+                          onClick={() => setViewer({ src, title: `${v.fullName} · ${FILE_LABELS[f]}` })}
+                          className="group relative h-20 w-28 overflow-hidden rounded-lg bg-zinc-100 ring-1 ring-zinc-200"
+                          title="Ampliar"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={src} alt={FILE_LABELS[f]} className="h-full w-full object-cover transition group-hover:scale-105" />
+                          <span className="absolute bottom-1 left-1 rounded bg-zinc-900/80 px-1 text-[10px] text-white">{FILE_LABELS[f]}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 lg:flex-col lg:items-stretch">
+                  <button onClick={() => review(v, "approve")} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700">
+                    Aprobar
+                  </button>
+                  <button
+                    onClick={() =>
+                      openDialog({
+                        kind: "prompt",
+                        title: `Rechazar verificación de ${v.fullName}`,
+                        label: "Motivo (lo verá el usuario; p. ej. «la foto del frente está borrosa»)",
+                        confirmLabel: "Rechazar",
+                        onSubmit: (note) => review(v, "reject", note),
+                      })
+                    }
+                    className="rounded-lg px-3 py-1.5 text-xs font-medium text-red-600 ring-1 ring-red-200 hover:bg-red-50"
+                  >
+                    Rechazar
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+      {viewer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-6" onClick={() => setViewer(null)} role="dialog" aria-label={viewer.title}>
+          <figure className="max-h-full max-w-4xl" onClick={(e) => e.stopPropagation()}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={viewer.src} alt={viewer.title} className="max-h-[80vh] rounded-xl object-contain" />
+            <figcaption className="mt-2 flex items-center justify-between text-sm text-white">
+              {viewer.title}
+              <button onClick={() => setViewer(null)} className="rounded-lg px-3 py-1 hover:bg-white/10">Cerrar</button>
+            </figcaption>
+          </figure>
+        </div>
+      )}
 
       {/* Cola de pagos */}
       <Card>
@@ -141,7 +263,14 @@ export function AdminView({ notify, openDialog }: { notify: (msg: string) => voi
               <tbody className="divide-y divide-zinc-100">
                 {payouts.map((p) => (
                   <tr key={p.id}>
-                    <td className="py-2.5 pr-3 font-medium">{p.email}</td>
+                    <td className="py-2.5 pr-3">
+                      <p className="font-medium">{p.email}</p>
+                      {p.verifiedName ? (
+                        <p className="text-xs text-emerald-700">✓ {p.verifiedName}</p>
+                      ) : (
+                        <p className="text-xs text-red-600">Identidad sin verificar</p>
+                      )}
+                    </td>
                     <td className="py-2.5 pr-3 text-right font-semibold tabular-nums">{formatMicros(p.amountMicros)}</td>
                     <td className="py-2.5 pr-3">
                       <p>{METHOD_LABELS[p.method as PayoutMethod] ?? p.method}</p>
@@ -157,12 +286,13 @@ export function AdminView({ notify, openDialog }: { notify: (msg: string) => voi
                     <td className="py-2.5 pr-3"><PayoutBadge status={p.status} /></td>
                     <td className="py-2.5 text-right">
                       <div className="flex justify-end gap-1.5">
-                        {p.status === "PENDING" && (
+                        {p.status === "PENDING" && p.verifiedName && (
                           <button onClick={() => act(p, "approve")} className="rounded-lg border border-zinc-200 px-2.5 py-1 text-xs font-medium hover:bg-zinc-50">
                             Aprobar
                           </button>
                         )}
                         <button
+                          disabled={!p.verifiedName}
                           onClick={() =>
                             openDialog({
                               kind: "prompt",
@@ -172,7 +302,7 @@ export function AdminView({ notify, openDialog }: { notify: (msg: string) => voi
                               onSubmit: (reference) => act(p, "pay", { reference }),
                             })
                           }
-                          className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700"
+                          className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           Pagado
                         </button>
@@ -273,7 +403,7 @@ export function AdminView({ notify, openDialog }: { notify: (msg: string) => voi
                     Mínimo (USD)
                     <input
                       type="number"
-                      min={1}
+                      min={25}
                       value={cfg.minUsd}
                       onChange={(e) => set("payoutMethods", { ...settings.payoutMethods, [m]: { ...cfg, minUsd: num(e.target.value) } })}
                       className={`mt-1 ${inputCls}`}

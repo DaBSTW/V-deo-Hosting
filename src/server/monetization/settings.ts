@@ -16,6 +16,9 @@ export const PAYOUT_METHODS = {
 export type PayoutMethod = keyof typeof PAYOUT_METHODS;
 const methodIds = Object.keys(PAYOUT_METHODS) as [PayoutMethod, ...PayoutMethod[]];
 
+/** Mínimo de retiro de la plataforma: ningún método puede bajar de aquí. */
+export const MIN_PAYOUT_USD = 25;
+
 export const monetizationSettingsSchema = z.object({
   /** Interruptor general: anuncios + ganancias. */
   enabled: z.boolean(),
@@ -28,7 +31,10 @@ export const monetizationSettingsSchema = z.object({
   /** Máximo de vistas monetizadas por IP y día (en todos los videos). */
   perIpDailyCap: z.number().int().min(1).max(1000),
   /** Métodos de cobro activos y su mínimo en USD. */
-  payoutMethods: z.record(z.enum(methodIds), z.object({ enabled: z.boolean(), minUsd: z.number().min(1).max(10_000) })),
+  payoutMethods: z.record(
+    z.enum(methodIds),
+    z.object({ enabled: z.boolean(), minUsd: z.number().min(MIN_PAYOUT_USD, `El mínimo de retiro no puede ser menor de ${MIN_PAYOUT_USD} USD`).max(10_000) }),
+  ),
   /** Etiqueta <meta> de verificación del sitio que da Monetag (se inserta en <head>). */
   monetagMetaTag: z.string().max(2_000),
   /** Código de anuncios de Monetag para el reproductor y el enlace directo. */
@@ -46,10 +52,10 @@ export const DEFAULT_SETTINGS: MonetizationSettings = {
   holdDays: 7,
   perIpDailyCap: 10,
   payoutMethods: {
-    PAYPAL: { enabled: true, minUsd: 10 },
-    USDT_TRC20: { enabled: true, minUsd: 10 },
-    PAYONEER: { enabled: false, minUsd: 50 },
-    BANK: { enabled: false, minUsd: 100 },
+    PAYPAL: { enabled: true, minUsd: MIN_PAYOUT_USD },
+    USDT_TRC20: { enabled: true, minUsd: MIN_PAYOUT_USD },
+    PAYONEER: { enabled: false, minUsd: MIN_PAYOUT_USD },
+    BANK: { enabled: false, minUsd: MIN_PAYOUT_USD },
   },
   monetagMetaTag: "",
   monetagPlayerSnippet: "",
@@ -64,7 +70,9 @@ export async function getMonetizationSettings(): Promise<MonetizationSettings> {
   const hit = g.__monSettings;
   if (hit && hit.until > Date.now()) return hit.value;
   const row = await prisma.platformSetting.findUnique({ where: { key: KEY } });
-  const parsed = monetizationSettingsSchema.partial().safeParse(row?.value ?? {});
+  const stored = normalizeMinimums((row?.value ?? {}) as Record<string, unknown>);
+  const parsed = monetizationSettingsSchema.partial().safeParse(stored);
+  if (!parsed.success) console.warn("[monetization] ajustes guardados inválidos, se usan los predeterminados:", parsed.error.issues);
   const value: MonetizationSettings = {
     ...DEFAULT_SETTINGS,
     ...(parsed.success ? parsed.data : {}),
@@ -72,6 +80,18 @@ export async function getMonetizationSettings(): Promise<MonetizationSettings> {
   };
   g.__monSettings = { value, until: Date.now() + TTL_MS };
   return value;
+}
+
+/** Ajustes guardados antes del mínimo de 25 USD: se elevan al nuevo piso. */
+function normalizeMinimums(raw: Record<string, unknown>) {
+  const methods = raw.payoutMethods as Record<string, { enabled: boolean; minUsd: number }> | undefined;
+  if (!methods) return raw;
+  return {
+    ...raw,
+    payoutMethods: Object.fromEntries(
+      Object.entries(methods).map(([k, v]) => [k, { ...v, minUsd: Math.max(MIN_PAYOUT_USD, Number(v?.minUsd) || 0) }]),
+    ),
+  };
 }
 
 export async function saveMonetizationSettings(value: MonetizationSettings): Promise<MonetizationSettings> {
