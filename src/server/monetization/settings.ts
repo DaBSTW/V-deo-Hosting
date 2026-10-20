@@ -46,7 +46,7 @@ export const DEFAULT_SETTINGS: MonetizationSettings = {
   enabled: true,
   // Valores de partida conservadores: recalcúlalos con tu eCPM real (ver README).
   rates: { T1: 1.0, T2: 0.4, T3: 0.1 },
-  minWatchSeconds: 30,
+  minWatchSeconds: 60,
   holdDays: 7,
   perIpDailyCap: 10,
   payoutMethods: {
