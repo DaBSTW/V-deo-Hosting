@@ -41,7 +41,9 @@ export const monetizationSettingsSchema = z.object({
 export type MonetizationSettings = z.infer<typeof monetizationSettingsSchema>;
 
 export const DEFAULT_SETTINGS: MonetizationSettings = {
-  enabled: false,
+  // Activa desde la instalación: las cuentas nuevas monetizan sin pasos extra.
+  // Mientras no haya código de anuncios, ninguna vista genera ganancias.
+  enabled: true,
   // Valores de partida conservadores: recalcúlalos con tu eCPM real (ver README).
   rates: { T1: 1.0, T2: 0.4, T3: 0.1 },
   minWatchSeconds: 30,

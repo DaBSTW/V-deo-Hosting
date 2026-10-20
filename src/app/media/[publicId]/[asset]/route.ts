@@ -106,7 +106,8 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
   if (q.get("stage") === "q") {
     const settings = await getMonetizationSettings();
-    if (settings.enabled && q.get("ad") === "1") {
+    // Sin código de anuncios no hay ingresos que repartir: no se paga la vista.
+    if (settings.enabled && settings.monetagPlayerSnippet.trim() && q.get("ad") === "1") {
       // País por Cloudflare (CF-IPCountry); sin Cloudflare delante cae en Nivel 3.
       recordPaidView(publicId, clientIp(req), req.headers.get("cf-ipcountry"), settings.perIpDailyCap);
     }

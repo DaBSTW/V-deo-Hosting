@@ -223,10 +223,15 @@ cuenta como Nivel 3.
    y, si usas Push, el contenido de `sw.js` (se sirve en `/sw.js`).
 3. Crea las zonas y pega su código en «Código de anuncios para el reproductor». Solo se inserta en
    `/embed/*` y `/v/*` de videos monetizados, nunca en el dashboard.
-4. Ajusta tarifas y reglas, y activa la monetización.
+4. Ajusta tarifas y reglas.
+
+La monetización viene **activa por defecto**: el interruptor general de la plataforma y el de cada
+cuenta nueva están encendidos desde el primer momento (el usuario puede apagar el suyo en su panel).
+Mientras no pegues el código de anuncios, ninguna vista genera ganancias, para no pagar vistas sin ingresos.
 
 ### Qué cuenta como vista monetizada
 
+* Solo cuenta si hay código de anuncios configurado (paso 3).
 * El reproductor envía un segundo aviso tras **N segundos reales de reproducción** (sin contar saltos),
   o el 50 % del video si es más corto, indicando si hay **bloqueador de anuncios** (con bloqueador no se paga).
 * El servidor descarta bots (por User-Agent), al propio dueño, repeticiones de la **misma IP y video en
