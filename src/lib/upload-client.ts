@@ -5,11 +5,14 @@
  * instrucciones genéricas (`single` = un PUT, `resumable` = protocolo TUS) y
  * las ejecuta. Cambiar de proveedor en el .env no requiere tocar este código.
  */
-import type { UploadInstructions } from "@/server/video-providers/types";
+import type { ThumbnailUploadInstructions, UploadInstructions } from "@/server/video-providers/types";
 import type { PublicVideo } from "@/server/videos/dto";
+import { probeVideo } from "./media-probe";
 
 export interface UploadCallbacks {
   onProgress: (fraction: number) => void;
+  /** Miniatura local (object URL) para mostrarla mientras se sube. */
+  onPreview?: (objectUrl: string) => void;
   signal: AbortSignal;
 }
 
@@ -38,26 +41,6 @@ async function api<T>(path: string, body: unknown): Promise<T> {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(data.error ?? "No se pudo completar la operación", res.status);
   return data as T;
-}
-
-/** Lee la duración en el navegador (orientativa) sin subir nada. */
-export function probeDuration(file: File, timeoutMs = 8000): Promise<number | null> {
-  return new Promise((resolve) => {
-    const video = document.createElement("video");
-    const url = URL.createObjectURL(file);
-    const done = (v: number | null) => {
-      clearTimeout(timer);
-      URL.revokeObjectURL(url);
-      video.removeAttribute("src");
-      resolve(v);
-    };
-    const timer = setTimeout(() => done(null), timeoutMs);
-    video.preload = "metadata";
-    video.muted = true;
-    video.onloadedmetadata = () => done(Number.isFinite(video.duration) ? video.duration : null);
-    video.onerror = () => done(null);
-    video.src = url;
-  });
 }
 
 function putFile(
@@ -110,30 +93,52 @@ async function resumableUpload(
   });
 }
 
+/** Sube la miniatura capturada. Es "best effort": si falla, se usa el respaldo. */
+async function putThumbnail(instr: ThumbnailUploadInstructions, blob: Blob, signal: AbortSignal) {
+  if (blob.size > instr.maxBytes) return false;
+  try {
+    const res = await fetch(instr.url, { method: instr.method, headers: instr.headers, body: blob, signal });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Flujo completo: pedir ticket → subir directo al almacenamiento → confirmar.
+ * Flujo completo: analizar en local (duración + miniatura) → pedir ticket →
+ * subir directo al almacenamiento (video y miniatura en paralelo) → confirmar.
  * Devuelve el video ya registrado (DTO público).
  */
 export async function uploadVideo(
   file: File,
   title: string,
+  folderId: string | null,
   cb: UploadCallbacks,
 ): Promise<PublicVideo> {
-  const durationSec = await probeDuration(file);
+  const { durationSec, thumbnail } = await probeVideo(file);
+  if (thumbnail) cb.onPreview?.(URL.createObjectURL(thumbnail));
 
-  const { videoId, upload } = await api<{ videoId: string; upload: UploadInstructions }>(
-    "/api/videos/upload-url",
-    {
-      title,
-      fileName: file.name,
-      sizeBytes: file.size,
-      mimeType: file.type || "video/mp4",
-    },
-  );
+  const { videoId, upload, thumbnailUpload } = await api<{
+    videoId: string;
+    upload: UploadInstructions;
+    thumbnailUpload?: ThumbnailUploadInstructions;
+  }>("/api/videos/upload-url", {
+    title,
+    fileName: file.name,
+    sizeBytes: file.size,
+    mimeType: file.type || "video/mp4",
+    folderId,
+  });
+
+  const thumbTask =
+    thumbnail && thumbnailUpload
+      ? putThumbnail(thumbnailUpload, thumbnail, cb.signal)
+      : Promise.resolve(false);
 
   if (upload.protocol === "single") await putFile(upload, file, cb);
   else await resumableUpload(upload, file, cb);
   cb.onProgress(1);
+  const hasThumbnail = await thumbTask;
 
   // El proveedor puede tardar un instante en reflejar la subida (409 → reintento).
   for (let attempt = 1; ; attempt++) {
@@ -141,6 +146,7 @@ export async function uploadVideo(
       const { video } = await api<{ video: PublicVideo }>("/api/videos/confirm", {
         videoId,
         durationSec,
+        hasThumbnail,
       });
       return video;
     } catch (err) {

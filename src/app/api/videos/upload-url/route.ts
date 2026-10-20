@@ -13,12 +13,15 @@ const schema = z.object({
     .string()
     .regex(/^video\/[a-z0-9.+-]+$/i, "Solo se admiten archivos de video")
     .transform((v) => v.toLowerCase()),
+  folderId: z.string().max(40).nullish(),
 });
 
 /**
  * POST /api/videos/upload-url
- * Devuelve `{ videoId, upload }`: el id público y las instrucciones genéricas
- * de subida directa (URL prefirmada o sesión reanudable). Sin credenciales.
+ * Devuelve `{ videoId, upload, thumbnailUpload? }`: el id público y las
+ * instrucciones genéricas de subida directa (URL prefirmada o sesión
+ * reanudable) y, si el proveedor no genera miniaturas, dónde subir la que
+ * captura el navegador. Sin credenciales.
  */
 export const POST = route(async (req) => {
   const user = await requireApiUser();

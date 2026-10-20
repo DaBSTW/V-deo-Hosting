@@ -1,12 +1,35 @@
-import { DashboardClient } from "@/components/dashboard/DashboardClient";
+import { DashboardApp } from "@/components/dashboard/DashboardApp";
+import type { FolderFilter } from "@/components/dashboard/types";
 import { requirePageUser } from "@/server/auth/session";
-import { listVideos, maxUploadBytes } from "@/server/videos/service";
+import { listFolders, listVideos, maxUploadBytes } from "@/server/videos/service";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Mis videos" };
 
-export default async function DashboardPage() {
+type Props = { searchParams: Promise<{ folder?: string }> };
+
+export default async function DashboardPage({ searchParams }: Props) {
   const user = await requirePageUser();
-  const videos = await listVideos(user.id);
-  return <DashboardClient initialVideos={videos} maxBytes={maxUploadBytes()} />;
+  const [videos, folders, { folder }] = await Promise.all([
+    listVideos(user.id),
+    listFolders(user.id),
+    searchParams,
+  ]);
+
+  const initialFilter: FolderFilter =
+    folder === "none"
+      ? { kind: "none" }
+      : folder && folders.some((f) => f.id === folder)
+        ? { kind: "folder", id: folder }
+        : { kind: "all" };
+
+  return (
+    <DashboardApp
+      user={{ email: user.email, name: user.name }}
+      initialVideos={videos}
+      initialFolders={folders}
+      initialFilter={initialFilter}
+      maxBytes={maxUploadBytes()}
+    />
+  );
 }

@@ -57,11 +57,24 @@ export type UploadInstructions =
       expiresAt: string;
     };
 
+/** Subida de la miniatura que el navegador extrae del propio archivo. */
+export interface ThumbnailUploadInstructions {
+  method: "PUT";
+  url: string;
+  headers: Record<string, string>;
+  maxBytes: number;
+}
+
 export interface UploadTicket {
   /** Id interno del proveedor (object key / uid). Se guarda solo en la DB. */
   providerVideoId: string;
   providerMeta?: ProviderMeta;
   instructions: UploadInstructions;
+  /**
+   * Solo si el proveedor NO genera miniaturas por sí mismo: el navegador
+   * captura un fotograma y lo sube aquí (cero CPU en el VPS).
+   */
+  thumbnail?: ThumbnailUploadInstructions;
 }
 
 export interface ProviderVideoState {
@@ -74,6 +87,8 @@ export interface ProviderVideoState {
   providerMeta?: ProviderMeta;
   /** Solicita post-procesado en segundo plano (p. ej. generar HLS). */
   postProcess?: boolean;
+  /** Hay miniatura disponible para este video. */
+  hasThumbnail?: boolean;
 }
 
 export interface PlaybackSource {
@@ -91,6 +106,8 @@ export interface ConfirmHints {
   /** Duración leída en el navegador (orientativa; el proveedor manda). */
   clientDurationSec?: number | null;
   maxSizeBytes: number;
+  /** El navegador dice haber subido una miniatura (el adaptador la verifica). */
+  clientThumbnail?: boolean;
 }
 
 export interface WebhookRequest {

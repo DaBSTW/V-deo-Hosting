@@ -6,6 +6,12 @@
  *      a) `R2_PUBLIC_BASE_URL` (dominio propio conectado al bucket): sirve el
  *         archivo / HLS desde tu dominio con la caché de Cloudflare.
  *      b) Sin dominio propio: URL prefirmada `GET` de corta duración.
+ *  - Miniaturas (sin CPU en el VPS):
+ *      1) El navegador captura un fotograma del archivo local con <canvas> y lo
+ *         sube a `poster.jpg` con una segunda URL prefirmada.
+ *      2) Respaldo opcional: Cloudflare Media Transformations extrae un
+ *         fotograma en el edge (`R2_MEDIA_TRANSFORMATIONS=true`).
+ *      3) El worker HLS (si está activo) regenera la miniatura con ffmpeg.
  *  - HLS opcional: si `R2_HLS_ENABLED=true`, el video queda READY al instante
  *    (reproducción progresiva MP4) y el worker `scripts/hls-worker.ts` genera
  *    en segundo plano un HLS multi-calidad; al terminar, `providerMeta.hls`
@@ -45,6 +51,7 @@ import type {
 } from "./types";
 
 const UPLOAD_URL_TTL_SEC = 60 * 60;
+const THUMBNAIL_MAX_BYTES = 2 * 1024 * 1024;
 const KEY_RE = /^videos\/[0-9A-Za-z]{24}\/source\.[a-z0-9]{2,5}$/;
 const SIGNATURE_HEADER = "x-r2-event-signature";
 
@@ -106,16 +113,16 @@ export class CloudflareR2Adapter implements VideoProviderAdapter {
     const ext = EXT_BY_MIME[req.mimeType] ?? "mp4";
     const key = `videos/${randomToken(24)}/source.${ext}`;
 
-    const url = await this.wrap("presign upload", () =>
-      getSignedUrl(
-        this.s3,
-        new PutObjectCommand({
-          Bucket: this.env.R2_BUCKET,
-          Key: key,
-          ContentType: req.mimeType,
-        }),
-        { expiresIn: UPLOAD_URL_TTL_SEC },
-      ),
+    const presignPut = (Key: string, ContentType: string) =>
+      getSignedUrl(this.s3, new PutObjectCommand({ Bucket: this.env.R2_BUCKET, Key, ContentType }), {
+        expiresIn: UPLOAD_URL_TTL_SEC,
+      });
+
+    const [url, thumbUrl] = await this.wrap("presign upload", () =>
+      Promise.all([
+        presignPut(key, req.mimeType),
+        presignPut(`${CloudflareR2Adapter.folderOf(key)}/poster.jpg`, "image/jpeg"),
+      ]),
     );
 
     return {
@@ -127,6 +134,12 @@ export class CloudflareR2Adapter implements VideoProviderAdapter {
         // Deben coincidir exactamente con los firmados.
         headers: { "Content-Type": req.mimeType },
         expiresAt: new Date(Date.now() + UPLOAD_URL_TTL_SEC * 1000).toISOString(),
+      },
+      thumbnail: {
+        method: "PUT",
+        url: thumbUrl,
+        headers: { "Content-Type": "image/jpeg" },
+        maxBytes: THUMBNAIL_MAX_BYTES,
       },
     };
   }
@@ -148,14 +161,31 @@ export class CloudflareR2Adapter implements VideoProviderAdapter {
       };
     }
 
+    const poster = hints.clientThumbnail ? await this.verifyClientThumbnail(ref) : false;
+
     return {
       // Reproducción progresiva inmediata; el HLS (si está activo) llega después.
       status: "READY",
       sizeBytes: size,
       durationSec: sanitizeDuration(hints.clientDurationSec),
       postProcess: this.env.R2_HLS_ENABLED,
-      providerMeta: { hls: false },
+      providerMeta: { hls: false, poster },
+      hasThumbnail: poster || this.env.R2_MEDIA_TRANSFORMATIONS,
     };
+  }
+
+  /** La miniatura la sube el navegador: comprobamos que exista y sea razonable. */
+  private async verifyClientThumbnail(ref: ProviderVideoRef): Promise<boolean> {
+    const key = `${CloudflareR2Adapter.folderOf(ref.providerVideoId)}/poster.jpg`;
+    const head = await this.head(key);
+    if (!head) return false;
+    if (head.size > 0 && head.size <= THUMBNAIL_MAX_BYTES && head.contentType === "image/jpeg") {
+      return true;
+    }
+    await this.wrap("delete thumbnail", () =>
+      this.s3.send(new DeleteObjectsCommand({ Bucket: this.env.R2_BUCKET, Delete: { Objects: [{ Key: key }] } })),
+    );
+    return false;
   }
 
   // -------------------------------------------------------------------------
@@ -174,20 +204,22 @@ export class CloudflareR2Adapter implements VideoProviderAdapter {
     const hasPoster = ref.providerMeta?.poster === true;
 
     if (base) {
+      // Miniatura propia si existe; si no, fotograma extraído en el edge.
+      const posterUrl = hasPoster
+        ? `${base}/${folder}/poster.jpg`
+        : this.env.R2_MEDIA_TRANSFORMATIONS
+          ? `${base}/cdn-cgi/media/mode=frame,time=1s,width=640,height=360,fit=cover/${key}`
+          : null;
+
       if (ref.providerMeta?.hls === true) {
         return {
           kind: "hls",
           url: `${base}/${folder}/hls/master.m3u8`,
           mimeType: "application/vnd.apple.mpegurl",
-          posterUrl: hasPoster ? `${base}/${folder}/poster.jpg` : null,
+          posterUrl,
         };
       }
-      return {
-        kind: "mp4",
-        url: `${base}/${key}`,
-        mimeType: playableMime(ref.mimeType),
-        posterUrl: hasPoster ? `${base}/${folder}/poster.jpg` : null,
-      };
+      return { kind: "mp4", url: `${base}/${key}`, mimeType: playableMime(ref.mimeType), posterUrl };
     }
 
     const sign = (Key: string, ResponseContentType?: string) =>

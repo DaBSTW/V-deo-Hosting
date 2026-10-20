@@ -41,7 +41,23 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  videos  Video[]
+  folders Folder[]
+}
+
+/// Carpetas del usuario para organizar sus videos (un nivel, sin anidar).
+model Folder {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   videos Video[]
+
+  @@unique([userId, name])
+  @@index([userId, createdAt])
 }
 
 model Video {
@@ -51,8 +67,14 @@ model Video {
   userId   String
   user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  /// Al borrar la carpeta, sus videos pasan a "Sin carpeta".
+  folderId String?
+  folder   Folder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+
   title       String
   status      VideoStatus @default(PENDING_UPLOAD)
+  /// Hay miniatura disponible (la genera el navegador, el proveedor o el worker).
+  hasThumbnail Boolean    @default(false)
   durationSec Float?
   sizeBytes   BigInt      @default(0)
   mimeType    String?
@@ -78,6 +100,7 @@ model Video {
 
   @@unique([provider, providerVideoId])
   @@index([userId, createdAt])
+  @@index([folderId])
   @@index([status, updatedAt])
   @@index([provider, postProcessPending])
 }

@@ -250,7 +250,8 @@ function mapStreamVideo(v: StreamVideo): ProviderVideoState {
   }
   if (state === "pendingupload") return { status: "PENDING_UPLOAD" };
   if (v.readyToStream && state === "ready") {
-    return { status: "READY", durationSec: duration, sizeBytes: size };
+    // Stream genera las miniaturas en su CDN: no hay que subir ni calcular nada.
+    return { status: "READY", durationSec: duration, sizeBytes: size, hasThumbnail: true };
   }
   // queued | downloading | inprogress | ready-sin-readyToStream
   return { status: "PROCESSING", durationSec: duration, sizeBytes: size };

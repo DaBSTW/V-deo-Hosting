@@ -57,7 +57,8 @@ export async function processNextHlsJob(log = console): Promise<boolean> {
   log.info(`[hls] procesando ${candidate.publicId}`);
   try {
     const result = await transcode(candidate);
-    await finish(candidate, { hls: true, poster: result.poster }, result.durationSec);
+    // No pisamos una miniatura previa (p. ej. la del navegador) si ffmpeg no generó una.
+    await finish(candidate, { hls: true, ...(result.poster ? { poster: true } : {}) }, result.durationSec);
     log.info(`[hls] ${candidate.publicId} listo en ${((Date.now() - started) / 1000).toFixed(0)}s`);
   } catch (err) {
     log.error(`[hls] ${candidate.publicId} falló:`, err);
@@ -76,6 +77,7 @@ async function finish(video: Video, meta: ProviderMeta, durationSec?: number | n
       providerMeta: { ...((current.providerMeta as ProviderMeta | null) ?? {}), ...meta },
       postProcessPending: false,
       jobLockedAt: null,
+      hasThumbnail: current.hasThumbnail || meta.poster === true,
       durationSec: durationSec ?? current.durationSec,
     },
   });

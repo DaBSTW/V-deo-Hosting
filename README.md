@@ -79,9 +79,15 @@ workers/r2-event-forwarder               (opcional) Worker: eventos R2 → webho
 | `POST`   | `/api/auth/login`            | `{ email, password }` → cookie de sesión |
 | `POST`   | `/api/auth/logout`           | Cierra la sesión |
 | `GET`    | `/api/videos`                | Lista de videos del usuario (DTO público) |
-| `POST`   | `/api/videos/upload-url`     | `{ title, fileName, sizeBytes, mimeType }` → `{ videoId, upload }` |
-| `POST`   | `/api/videos/confirm`        | `{ videoId, durationSec? }` → verifica con el proveedor y activa el video |
+| `POST`   | `/api/videos/upload-url`     | `{ title, fileName, sizeBytes, mimeType, folderId? }` → `{ videoId, upload, thumbnailUpload? }` |
+| `POST`   | `/api/videos/confirm`        | `{ videoId, durationSec?, hasThumbnail? }` → verifica con el proveedor y activa el video |
 | `GET`    | `/api/videos/:publicId`      | Detalle de un video |
+| `PATCH`  | `/api/videos/:publicId`      | `{ title?, folderId? }` → renombrar / mover (`folderId: null` = sin carpeta) |
+| `POST`   | `/api/videos/move`           | `{ videoIds[], folderId }` → mover varios a la vez |
+| `GET`    | `/api/folders`               | Carpetas del usuario |
+| `POST`   | `/api/folders`               | `{ name }` → crear carpeta |
+| `PATCH`  | `/api/folders/:id`           | `{ name }` → renombrar |
+| `DELETE` | `/api/folders/:id`           | Borra la carpeta; sus videos pasan a «Sin carpeta» |
 | `DELETE` | `/api/videos/:publicId`      | Borra los archivos remotos (vía adaptador) y el registro local |
 | `POST`   | `/api/webhooks/cloudflare`   | Receptor genérico (Stream: `Webhook-Signature`; R2: `X-R2-Event-Signature`) |
 | `GET`    | `/media/:publicId/:asset`    | `source` \| `poster`: pasarela firmada → `302` |
@@ -93,6 +99,34 @@ workers/r2-event-forwarder               (opcional) Worker: eventos R2 → webho
 // o
 { "protocol": "resumable", "url": "…", "chunkSizeBytes": 52428800 }
 ```
+
+---
+
+## Dashboard
+
+* Barra lateral con **Todos los videos**, **Sin carpeta** y las **carpetas** del usuario (crear,
+  renombrar, eliminar; los contadores se actualizan al momento). La carpeta abierta queda en la URL (`?folder=`).
+* Vista en **cuadrícula con miniaturas** o en **lista**, búsqueda por título y orden (recientes, antiguos, nombre, tamaño).
+* **Arrastrar y soltar**: archivos sobre la página para subirlos a la carpeta abierta, y tarjetas sobre
+  una carpeta de la barra lateral para moverlas. Selección múltiple con Shift para mover o borrar en bloque.
+* Panel flotante de subidas (2 en paralelo) con la miniatura local, el progreso y un botón para cancelar.
+* Modal de detalle con el reproductor real (el mismo `iframe` que verán tus visitantes), un selector
+  de carpeta y botones para copiar el código de inserción y el enlace directo.
+
+## Miniaturas (sin cargar el VPS)
+
+El VPS **no descarga ni decodifica videos** para generar miniaturas. Según el proveedor:
+
+| Fuente | Cuándo | Coste en el VPS |
+|---|---|---|
+| **Navegador del usuario** (R2) | Antes de subir, `src/lib/media-probe.ts` abre el archivo **local** en un `<video>` oculto, salta al ~10 % (máx. 3 s, para evitar negros iniciales), dibuja el fotograma en un `<canvas>` y lo exporta a JPEG de 640 px (unos 30-80 KB). El backend devuelve una segunda URL prefirmada (`thumbnailUpload`) y el navegador sube la miniatura **directamente a R2**, en paralelo con el video. | Cero: solo firma una URL y hace un `HEAD` para validar (≤ 2 MB, `image/jpeg`) |
+| **Cloudflare Stream** | Stream genera las miniaturas en su CDN al transcodificar. | Cero |
+| **Media Transformations** (R2, opcional) | Respaldo para archivos que el navegador no sabe decodificar (algunos MKV/HEVC): con `R2_MEDIA_TRANSFORMATIONS=true`, Cloudflare extrae un fotograma **en el edge** (`/cdn-cgi/media/mode=frame,…`) y lo cachea. Tiene límites de tamaño y duración del archivo de entrada; consulta la documentación vigente. | Cero |
+| **Worker HLS** (R2, opcional) | Si ya ejecutas el worker de HLS, aprovecha la pasada de ffmpeg y regenera `poster.jpg` sin coste adicional. | El del propio worker |
+
+Las miniaturas se sirven con la misma pasarela opaca (`/media/<id>/poster?…`). La firma caduca en
+intervalos de una hora, así que la URL se mantiene estable y el navegador las cachea. Si no hay
+miniatura, la tarjeta muestra un marcador neutro.
 
 ---
 

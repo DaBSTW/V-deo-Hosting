@@ -15,6 +15,7 @@ import type {
   ProviderMeta,
   ProviderVideoRef,
   ProviderVideoState,
+  ThumbnailUploadInstructions,
   UploadInstructions,
   WebhookRequest,
 } from "../video-providers/types";
@@ -45,15 +46,24 @@ export interface CreateUploadInput {
   fileName: string;
   sizeBytes: number;
   mimeType: string;
+  folderId?: string | null;
+}
+
+export interface UploadTicketResponse {
+  videoId: string;
+  upload: UploadInstructions;
+  /** Presente solo si el proveedor necesita que el navegador aporte la miniatura. */
+  thumbnailUpload?: ThumbnailUploadInstructions;
 }
 
 export async function createUpload(
   userId: string,
-  input: CreateUploadInput,
-): Promise<{ videoId: string; upload: UploadInstructions }> {
+  { folderId, ...input }: CreateUploadInput,
+): Promise<UploadTicketResponse> {
   if (input.sizeBytes > maxUploadBytes()) {
     throw new HttpError(413, `El archivo supera el máximo de ${getCoreEnv().MAX_UPLOAD_MB} MB`);
   }
+  if (folderId) await findOwnedFolder(userId, folderId);
 
   // El proveedor ACTIVO solo decide dónde van las subidas nuevas.
   const adapter = getActiveAdapter();
@@ -64,6 +74,7 @@ export async function createUpload(
     data: {
       publicId,
       userId,
+      folderId: folderId ?? null,
       title: input.title,
       mimeType: input.mimeType,
       sizeBytes: BigInt(input.sizeBytes),
@@ -74,29 +85,34 @@ export async function createUpload(
     },
   });
 
-  return { videoId: publicId, upload: ticket.instructions };
+  return { videoId: publicId, upload: ticket.instructions, thumbnailUpload: ticket.thumbnail };
 }
 
 export async function confirmUpload(
   userId: string,
   publicId: string,
-  clientDurationSec?: number | null,
+  hints: { durationSec?: number | null; hasThumbnail?: boolean } = {},
 ): Promise<PublicVideo> {
   const video = await findOwned(userId, publicId);
   if (video.status !== "PENDING_UPLOAD") return toPublicVideo(video); // idempotente
 
-  const updated = await runConfirm(video, clientDurationSec);
+  const updated = await runConfirm(video, hints.durationSec, hints.hasThumbnail);
   if (updated.status === "PENDING_UPLOAD") {
     throw new HttpError(409, "La subida aún no ha finalizado");
   }
   return toPublicVideo(updated);
 }
 
-async function runConfirm(video: Video, clientDurationSec?: number | null): Promise<Video> {
+async function runConfirm(
+  video: Video,
+  clientDurationSec?: number | null,
+  clientThumbnail = false,
+): Promise<Video> {
   const state = await getAdapter(video.provider).confirmUpload(refOf(video), {
     declaredSizeBytes: Number(video.sizeBytes),
     clientDurationSec,
     maxSizeBytes: maxUploadBytes(),
+    clientThumbnail,
   });
   return applyState(video, state);
 }
@@ -120,6 +136,7 @@ export async function applyState(video: Video, state: ProviderVideoState): Promi
       providerMeta: Object.keys(meta).length ? meta : Prisma.JsonNull,
       errorReason: state.status === "ERROR" ? (state.errorReason ?? "unknown") : null,
       postProcessPending: state.postProcess ?? video.postProcessPending,
+      hasThumbnail: state.hasThumbnail ?? video.hasThumbnail,
       readyAt: state.status === "READY" ? (video.readyAt ?? new Date()) : video.readyAt,
     },
   });
@@ -175,6 +192,94 @@ async function findOwned(userId: string, publicId: string): Promise<Video> {
   // 404 también si no es suyo: no revelamos la existencia de videos ajenos.
   if (!video || video.userId !== userId) throw new HttpError(404, "Video no encontrado");
   return video;
+}
+
+// ---------------------------------------------------------------------------
+// Edición (título / carpeta)
+// ---------------------------------------------------------------------------
+export async function updateVideo(
+  userId: string,
+  publicId: string,
+  patch: { title?: string; folderId?: string | null },
+): Promise<PublicVideo> {
+  const video = await findOwned(userId, publicId);
+  if (patch.folderId) await findOwnedFolder(userId, patch.folderId);
+  const updated = await prisma.video.update({
+    where: { id: video.id },
+    data: {
+      ...(patch.title !== undefined && { title: patch.title }),
+      ...(patch.folderId !== undefined && { folderId: patch.folderId }),
+    },
+  });
+  return toPublicVideo(updated);
+}
+
+/** Mueve varios videos a la vez (arrastrar y soltar, selección múltiple). */
+export async function moveVideos(userId: string, publicIds: string[], folderId: string | null) {
+  if (folderId) await findOwnedFolder(userId, folderId);
+  const { count } = await prisma.video.updateMany({
+    where: { userId, publicId: { in: publicIds } },
+    data: { folderId },
+  });
+  return { moved: count };
+}
+
+// ---------------------------------------------------------------------------
+// Carpetas
+// ---------------------------------------------------------------------------
+export interface PublicFolder {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+const toPublicFolder = (f: { id: string; name: string; createdAt: Date }): PublicFolder => ({
+  id: f.id,
+  name: f.name,
+  createdAt: f.createdAt.toISOString(),
+});
+
+export async function listFolders(userId: string): Promise<PublicFolder[]> {
+  const folders = await prisma.folder.findMany({ where: { userId }, orderBy: { name: "asc" } });
+  return folders.map(toPublicFolder);
+}
+
+export async function createFolder(userId: string, name: string): Promise<PublicFolder> {
+  if ((await prisma.folder.count({ where: { userId } })) >= 200) {
+    throw new HttpError(400, "Has alcanzado el máximo de carpetas");
+  }
+  try {
+    return toPublicFolder(await prisma.folder.create({ data: { userId, name } }));
+  } catch (err) {
+    throw uniqueNameError(err);
+  }
+}
+
+export async function renameFolder(userId: string, id: string, name: string): Promise<PublicFolder> {
+  await findOwnedFolder(userId, id);
+  try {
+    return toPublicFolder(await prisma.folder.update({ where: { id }, data: { name } }));
+  } catch (err) {
+    throw uniqueNameError(err);
+  }
+}
+
+/** Borra la carpeta; sus videos pasan a "Sin carpeta" (onDelete: SetNull). */
+export async function deleteFolder(userId: string, id: string): Promise<void> {
+  await findOwnedFolder(userId, id);
+  await prisma.folder.delete({ where: { id } });
+}
+
+async function findOwnedFolder(userId: string, id: string) {
+  const folder = await prisma.folder.findUnique({ where: { id } });
+  if (!folder || folder.userId !== userId) throw new HttpError(404, "Carpeta no encontrada");
+  return folder;
+}
+
+function uniqueNameError(err: unknown): unknown {
+  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002"
+    ? new HttpError(409, "Ya tienes una carpeta con ese nombre")
+    : err;
 }
 
 // ---------------------------------------------------------------------------

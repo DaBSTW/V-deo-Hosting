@@ -5,6 +5,7 @@
  */
 import type { Video } from "@prisma/client";
 import { getCoreEnv } from "@/lib/env";
+import { mediaPath } from "./playback-token";
 
 export type PublicVideoStatus = "uploading" | "processing" | "ready" | "error";
 
@@ -15,6 +16,9 @@ export interface PublicVideo {
   durationSec: number | null;
   sizeBytes: number;
   createdAt: string;
+  folderId: string | null;
+  /** Ruta propia firmada (`/media/.../poster`) o `null` si aún no hay miniatura. */
+  thumbnailUrl: string | null;
   embedUrl: string;
   watchUrl: string;
   iframe: string;
@@ -48,6 +52,8 @@ export function toPublicVideo(v: Video): PublicVideo {
     durationSec: v.durationSec,
     sizeBytes: Number(v.sizeBytes),
     createdAt: v.createdAt.toISOString(),
+    folderId: v.folderId,
+    thumbnailUrl: v.hasThumbnail && v.status === "READY" ? mediaPath(v.publicId, "poster") : null,
     embedUrl: embedUrlFor(v.publicId),
     watchUrl: `${getCoreEnv().APP_URL}/v/${v.publicId}`,
     iframe: iframeFor(v.publicId, v.title),

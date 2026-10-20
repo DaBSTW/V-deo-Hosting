@@ -32,7 +32,11 @@ export async function GET(req: NextRequest, ctx: Ctx) {
 
     return NextResponse.redirect(target, {
       status: 302,
-      headers: { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" },
+      headers: {
+        // Las miniaturas se repiten mucho en el dashboard: caché corta de la redirección.
+        "Cache-Control": asset === "poster" ? "private, max-age=300" : "private, no-store",
+        "Referrer-Policy": "no-referrer",
+      },
     });
   } catch (err) {
     return errorResponse(err);

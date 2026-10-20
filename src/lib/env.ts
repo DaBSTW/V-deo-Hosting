@@ -83,6 +83,12 @@ const r2Schema = z
     R2_ENDPOINT: optionalUrl,
     /** Dominio propio conectado al bucket, p. ej. https://media.midominio.com */
     R2_PUBLIC_BASE_URL: optionalUrl,
+    /**
+     * Miniaturas de respaldo con Cloudflare Media Transformations (extracción
+     * de fotogramas en el edge). Requiere R2_PUBLIC_BASE_URL en una zona con
+     * Transformations activado.
+     */
+    R2_MEDIA_TRANSFORMATIONS: bool(false),
     /** Activa la generación de HLS multi-calidad con el worker (ffmpeg). */
     R2_HLS_ENABLED: bool(false),
     /** Secreto HMAC del Worker que reenvía las notificaciones de eventos R2. */
@@ -91,6 +97,10 @@ const r2Schema = z
   .refine((v) => !v.R2_HLS_ENABLED || !!v.R2_PUBLIC_BASE_URL, {
     message:
       "R2_HLS_ENABLED=true requiere R2_PUBLIC_BASE_URL (los segmentos HLS no pueden firmarse uno a uno)",
+    path: ["R2_PUBLIC_BASE_URL"],
+  })
+  .refine((v) => !v.R2_MEDIA_TRANSFORMATIONS || !!v.R2_PUBLIC_BASE_URL, {
+    message: "R2_MEDIA_TRANSFORMATIONS=true requiere R2_PUBLIC_BASE_URL",
     path: ["R2_PUBLIC_BASE_URL"],
   });
 export const getR2Env = memo(() => parse("r2", r2Schema));
