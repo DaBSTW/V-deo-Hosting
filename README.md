@@ -84,6 +84,8 @@ workers/r2-event-forwarder               (opcional) Worker: eventos R2 → webho
 | `GET`    | `/api/videos/:publicId`      | Detalle de un video |
 | `PATCH`  | `/api/videos/:publicId`      | `{ title?, folderId?, allowDownload? }` → renombrar / mover / permitir descarga |
 | `POST`   | `/api/videos/move`           | `{ videoIds[], folderId }` → mover varios a la vez |
+| `GET`    | `/api/stats`                 | Series diarias de reproducciones/descargas (180 días) y cuota |
+| `POST`   | `/media/:publicId/view`      | Aviso de reproducción (firmado; lo envía el reproductor al pulsar play) |
 | `GET`    | `/api/folders`               | Carpetas del usuario |
 | `POST`   | `/api/folders`               | `{ name }` → crear carpeta |
 | `PATCH`  | `/api/folders/:id`           | `{ name }` → renombrar |
@@ -112,6 +114,35 @@ workers/r2-event-forwarder               (opcional) Worker: eventos R2 → webho
 * Panel flotante de subidas (2 en paralelo) con la miniatura local, el progreso y un botón para cancelar.
 * Modal de detalle con el reproductor real (el mismo `iframe` que verán tus visitantes), un selector
   de carpeta y botones para copiar el código de inserción y el enlace directo.
+
+## Resumen (portada del dashboard)
+
+Al entrar al dashboard se muestra el **Resumen**, con un selector de periodo (7 / 30 / 90 días)
+que afecta a todo lo de abajo:
+
+* **Reproducciones** y **descargas** del periodo, con la variación frente al periodo anterior
+  (flecha y texto, nunca solo color), una minitendencia y las de hoy.
+* **Almacenamiento** usado. Con `STORAGE_QUOTA_GB`, un medidor que se pone en ámbar al 80 % y en rojo
+  al 95 %, y la subida se bloquea al superarlo.
+* **Videos** por estado: listos, procesando y con error.
+* Contenido publicado (duración total), reproducciones históricas y videos subidos en el periodo.
+* **Gráfica diaria** de reproducciones o descargas, con tooltip al pasar el ratón o con las
+  flechas del teclado, y una vista de **tabla**.
+* **Más vistos** del periodo, **Requiere atención** (errores y procesamientos) y **Subidos recientemente**.
+
+### Cómo se cuentan las visitas sin cargar el VPS
+
+1. El reproductor envía **un único** `navigator.sendBeacon` **al empezar a reproducir**
+   (no al cargar la página) a `/media/<id>/view?e=&s=`.
+2. El endpoint solo verifica la firma HMAC (sin consultar la DB), descarta repeticiones de la
+   misma IP en 30 min y las reproducciones del propio dueño, e **incrementa un contador en memoria**.
+3. Cada 10 s (o cada 2 000 videos distintos) el búfer se vuelca con **dos consultas SQL por lote**:
+   un *upsert* en `VideoDailyStat` (por video y día, UTC) y un `UPDATE` de los totales en `Video`.
+   Mil reproducciones son una escritura, no mil.
+
+Las descargas se cuentan igual, en la redirección de `/media/<id>/download`. Si el proceso se
+reinicia de golpe se pueden perder como mucho los últimos ~10 s de eventos. Al borrar un video
+se borran también sus estadísticas.
 
 ## Página pública: descargar e insertar
 

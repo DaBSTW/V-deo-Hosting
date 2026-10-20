@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { Dialogs, type DialogState } from "../ui/Dialogs";
 import { Menu } from "../ui/Menu";
 import {
-  FolderIcon, GridIcon, InboxIcon, ListIcon, MenuIcon, SearchIcon, TrashIcon, UploadIcon, XIcon,
+  ChartIcon, FolderIcon, GridIcon, InboxIcon, ListIcon, MenuIcon, SearchIcon, TrashIcon, UploadIcon, XIcon,
 } from "../ui/icons";
+import type { DashboardStats } from "@/server/videos/stats";
+import { Overview } from "./overview/Overview";
 import { Sidebar } from "./Sidebar";
 import { DRAG_MIME, type FolderFilter, type PublicFolder, type PublicVideo, type VideoActions } from "./types";
 import { UploadPanel } from "./UploadPanel";
@@ -42,18 +44,22 @@ export function DashboardApp({
   initialVideos,
   initialFolders,
   initialFilter,
+  initialStats,
   maxBytes,
 }: {
   user: { email: string; name: string | null };
   initialVideos: PublicVideo[];
   initialFolders: PublicFolder[];
   initialFilter: FolderFilter;
+  initialStats: DashboardStats;
   maxBytes: number;
 }) {
   const router = useRouter();
   const [videos, setVideos] = useState(initialVideos);
   const [folders, setFolders] = useState(initialFolders);
   const [filter, setFilter] = useState<FolderFilter>(initialFilter);
+  const [stats, setStats] = useState(initialStats);
+  const [statsLoading, setStatsLoading] = useState(false);
   const [view, setView] = useState<View>("grid");
   const [sort, setSort] = useState<Sort>("new");
   const [query, setQuery] = useState("");
@@ -85,10 +91,11 @@ export function DashboardApp({
   const changeFilter = (f: FolderFilter) => {
     setFilter(f);
     setSelected(new Set());
+    if (f.kind === "overview") void refreshStats();
     setSidebarOpen(false);
     const url = new URL(window.location.href);
-    if (f.kind === "all") url.searchParams.delete("folder");
-    else url.searchParams.set("folder", f.kind === "none" ? "none" : f.id);
+    if (f.kind === "overview") url.searchParams.delete("folder");
+    else url.searchParams.set("folder", f.kind === "folder" ? f.id : f.kind);
     window.history.replaceState(null, "", url);
   };
 
@@ -99,7 +106,28 @@ export function DashboardApp({
 
   const currentFolderId = filter.kind === "folder" ? filter.id : null;
   const currentFolder = folders.find((f) => f.id === currentFolderId);
-  const title = filter.kind === "all" ? "Todos los videos" : filter.kind === "none" ? "Sin carpeta" : currentFolder?.name ?? "";
+  const isOverview = filter.kind === "overview";
+  const title =
+    filter.kind === "overview"
+      ? "Resumen"
+      : filter.kind === "all"
+        ? "Todos los videos"
+        : filter.kind === "none"
+          ? "Sin carpeta"
+          : currentFolder?.name ?? "";
+
+  // Estadísticas: se refrescan al volver al Resumen y cada minuto mientras está abierto.
+  const refreshStats = useCallback(async () => {
+    setStatsLoading(true);
+    const data = await api<DashboardStats>("/api/stats").catch(() => null);
+    if (data) setStats(data);
+    setStatsLoading(false);
+  }, []);
+  useEffect(() => {
+    if (!isOverview) return;
+    const id = setInterval(refreshStats, 60_000);
+    return () => clearInterval(id);
+  }, [isOverview, refreshStats]);
 
   const counts = useMemo(() => {
     const byFolder = new Map<string, number>();
@@ -117,7 +145,9 @@ export function DashboardApp({
     const q = query.trim().toLowerCase();
     const list = videos.filter(
       (v) =>
-        (filter.kind === "all" || (filter.kind === "none" ? !v.folderId : v.folderId === filter.id)) &&
+        (filter.kind === "all" ||
+          filter.kind === "overview" ||
+          (filter.kind === "none" ? !v.folderId : v.folderId === filter.id)) &&
         (!q || v.title.toLowerCase().includes(q)),
     );
     const cmp: Record<Sort, (a: PublicVideo, b: PublicVideo) => number> = {
@@ -397,12 +427,24 @@ export function DashboardApp({
             </button>
             <div className="min-w-0 flex-1">
               <h1 className="flex items-center gap-2 truncate text-base font-semibold tracking-tight">
-                {filter.kind === "folder" ? <FolderIcon className="h-4 w-4 text-zinc-400" /> : filter.kind === "none" ? <InboxIcon className="h-4 w-4 text-zinc-400" /> : null}
+                {filter.kind === "folder" ? (
+                  <FolderIcon className="h-4 w-4 text-zinc-400" />
+                ) : filter.kind === "none" ? (
+                  <InboxIcon className="h-4 w-4 text-zinc-400" />
+                ) : isOverview ? (
+                  <ChartIcon className="h-4 w-4 text-zinc-400" />
+                ) : null}
                 <span className="truncate">{title}</span>
               </h1>
-              <p className="text-xs text-zinc-500">{visible.length} {visible.length === 1 ? "video" : "videos"}</p>
+              <p className="text-xs text-zinc-500">
+                {isOverview
+                  ? "Tu actividad y el estado de tu biblioteca"
+                  : `${visible.length} ${visible.length === 1 ? "video" : "videos"}`}
+              </p>
             </div>
 
+            {!isOverview && (
+            <>
             <div className="relative hidden md:block">
               <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
               <input
@@ -438,6 +480,8 @@ export function DashboardApp({
                 </button>
               ))}
             </div>
+            </>
+            )}
 
             <button
               onClick={() => fileInput.current?.click()}
@@ -447,7 +491,7 @@ export function DashboardApp({
             </button>
           </div>
 
-          <div className="px-4 pb-3 md:hidden">
+          <div className={`px-4 pb-3 md:hidden ${isOverview ? "hidden" : ""}`}>
             <div className="relative">
               <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
               <input
@@ -461,7 +505,7 @@ export function DashboardApp({
         </header>
 
         {/* Barra de selección múltiple */}
-        {selected.size > 0 && (
+        {selected.size > 0 && !isOverview && (
           <div className="sticky top-16 z-10 mx-4 mt-4 flex items-center gap-2 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm text-white shadow-lg sm:mx-6">
             <span className="font-medium">{selected.size} seleccionados</span>
             <div className="flex-1" />
@@ -499,7 +543,15 @@ export function DashboardApp({
         )}
 
         <main className="flex-1 px-4 py-6 sm:px-6">
-          {visible.length > 0 ? (
+          {isOverview ? (
+            <Overview
+              videos={videos}
+              stats={stats}
+              actions={actions}
+              onUpload={() => fileInput.current?.click()}
+              refreshing={statsLoading}
+            />
+          ) : visible.length > 0 ? (
             view === "grid" ? (
               <VideoGrid videos={visible} folders={folders} actions={actions} selected={selected} onToggleSelect={toggleSelect} />
             ) : (

@@ -69,3 +69,13 @@ export const MoveIcon = (p: P) => (
 export const DownloadIcon = (p: P) => (
   <Svg {...p}><path d="M12 4v12m0 0-4-4m4 4 4-4M4 18v1a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1" /></Svg>
 );
+export const ChartIcon = (p: P) => <Svg {...p}><path d="M4 20h16M7 16v-5m5 5V8m5 8v-3" /></Svg>;
+export const ArrowUpIcon = (p: P) => <Svg {...p}><path d="M12 19V5m0 0-5 5m5-5 5 5" /></Svg>;
+export const ArrowDownIcon = (p: P) => <Svg {...p}><path d="M12 5v14m0 0-5-5m5 5 5-5" /></Svg>;
+export const EyeIcon = (p: P) => (
+  <Svg {...p}><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" /><path d="M12 14.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" /></Svg>
+);
+export const ClockIcon = (p: P) => <Svg {...p}><path d="M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" /></Svg>;
+export const DatabaseIcon = (p: P) => (
+  <Svg {...p}><path d="M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3Zm0 0v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" /></Svg>
+);

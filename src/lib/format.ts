@@ -40,3 +40,29 @@ export function formatRelative(iso: string): string {
   if (abs < 30 * 86400) return rtf.format(Math.round(diffSec / 86400), "day");
   return new Intl.DateTimeFormat("es", { day: "numeric", month: "short", year: "numeric" }).format(new Date(iso));
 }
+
+const compactFmt = new Intl.NumberFormat("es", { notation: "compact", maximumFractionDigits: 1 });
+const intFmt = new Intl.NumberFormat("es");
+
+/** 1234 → "1,2 mil" (a partir de 10 000; por debajo, con separador de miles). */
+export const formatCount = (n: number) => (Math.abs(n) >= 10_000 ? compactFmt.format(n) : intFmt.format(n));
+
+/** Duración larga legible: "3 h 12 min", "45 min", "30 s". */
+export function formatLongDuration(totalSec: number): string {
+  if (!totalSec || totalSec < 1) return "0 min";
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.round((totalSec % 3600) / 60);
+  if (h > 0) return m ? `${formatCount(h)} h ${m} min` : `${formatCount(h)} h`;
+  if (m > 0) return `${m} min`;
+  return `${Math.round(totalSec)} s`;
+}
+
+/** "2026-10-12" (UTC) → "12 oct" / "lun, 12 oct". */
+export function formatDay(isoDate: string, withWeekday = false): string {
+  return new Intl.DateTimeFormat("es", {
+    day: "numeric",
+    month: "short",
+    ...(withWeekday && { weekday: "short" }),
+    timeZone: "UTC",
+  }).format(new Date(`${isoDate}T00:00:00Z`));
+}

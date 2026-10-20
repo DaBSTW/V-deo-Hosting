@@ -69,6 +69,8 @@ const coreSchema = z.object({
   ALLOW_REGISTRATION: bool(true),
   /** Interruptor global de descargas (además del permiso por video). */
   ALLOW_DOWNLOADS: bool(true),
+  /** Cuota de almacenamiento por usuario en GB (0 = sin límite). */
+  STORAGE_QUOTA_GB: z.coerce.number().min(0).default(0),
 });
 export const getCoreEnv = memo(() => parse("core", coreSchema));
 

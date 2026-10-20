@@ -24,6 +24,6 @@ export function EmbedBody({ data, autoPlay }: { data: Awaited<ReturnType<typeof 
     case "error":
       return <PlayerMessage title={data.title} message="Este video no está disponible." />;
     case "ready":
-      return <VideoPlayer source={data.source} title={data.title} autoPlay={autoPlay} />;
+      return <VideoPlayer source={data.source} title={data.title} autoPlay={autoPlay} viewUrl={data.viewUrl} />;
   }
 }

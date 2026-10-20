@@ -18,6 +18,8 @@ export interface PublicVideo {
   createdAt: string;
   folderId: string | null;
   allowDownload: boolean;
+  views: number;
+  downloads: number;
   /** Ruta propia firmada (`/media/.../poster`) o `null` si aún no hay miniatura. */
   thumbnailUrl: string | null;
   embedUrl: string;
@@ -55,6 +57,8 @@ export function toPublicVideo(v: Video): PublicVideo {
     createdAt: v.createdAt.toISOString(),
     folderId: v.folderId,
     allowDownload: v.allowDownload,
+    views: v.views,
+    downloads: v.downloads,
     thumbnailUrl: v.hasThumbnail && v.status === "READY" ? mediaPath(v.publicId, "poster") : null,
     embedUrl: embedUrlFor(v.publicId),
     watchUrl: `${getCoreEnv().APP_URL}/v/${v.publicId}`,

@@ -3,7 +3,10 @@ import { isPublicVideoId } from "@/lib/ids";
 import { errorResponse } from "@/server/http";
 import { clientIp, rateLimit } from "@/server/rate-limit";
 import { verifyMediaToken, type MediaAsset } from "@/server/videos/playback-token";
+import { prisma } from "@/lib/prisma";
+import { SESSION_COOKIE, verifySession } from "@/server/auth/jwt";
 import { resolveDownload, resolveMediaUrl } from "@/server/videos/service";
+import { recordView } from "@/server/videos/stats-buffer";
 
 export const dynamic = "force-dynamic";
 
@@ -67,4 +70,27 @@ body{margin:0;min-height:100vh;display:grid;place-items:center;background:#09090
     status: 202,
     headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
   });
+}
+
+/**
+ * POST /media/:publicId/view?e=&s=
+ * Aviso de reproducción (navigator.sendBeacon al pulsar play). Coste mínimo:
+ * verificación HMAC + contador en memoria, sin consultar la DB (salvo que
+ * venga con sesión, para no contar las vistas del propio dueño).
+ */
+export async function POST(req: NextRequest, ctx: Ctx) {
+  const { publicId, asset } = await ctx.params;
+  const q = req.nextUrl.searchParams;
+  if (asset !== "view" || !isPublicVideoId(publicId) || !verifyMediaToken(publicId, "view", "", q.get("e"), q.get("s"))) {
+    return new NextResponse(null, { status: 403 });
+  }
+
+  const session = await verifySession(req.cookies.get(SESSION_COOKIE)?.value);
+  if (session) {
+    const video = await prisma.video.findUnique({ where: { publicId }, select: { userId: true } });
+    if (video?.userId === session.sub) return new NextResponse(null, { status: 204 });
+  }
+
+  recordView(publicId, clientIp(req));
+  return new NextResponse(null, { status: 204 });
 }

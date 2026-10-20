@@ -9,7 +9,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { getCoreEnv } from "@/lib/env";
 
-export type MediaAsset = "source" | "poster" | "download";
+export type MediaAsset = "source" | "poster" | "download" | "view";
 
 const payload = (publicId: string, asset: MediaAsset, variant: string, exp: number) =>
   `${publicId}.${asset}.${variant}.${exp}`;

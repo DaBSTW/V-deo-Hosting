@@ -80,6 +80,10 @@ model Video {
   durationSec Float?
   sizeBytes   BigInt      @default(0)
   mimeType    String?
+  /// Contadores históricos (se acumulan por lotes, ver stats-buffer.ts).
+  views       Int         @default(0)
+  downloads   Int         @default(0)
+  dailyStats  VideoDailyStat[]
 
   // ---------------- Campos privados (solo backend) ----------------
   provider        MediaProvider
@@ -105,4 +109,16 @@ model Video {
   @@index([folderId])
   @@index([status, updatedAt])
   @@index([provider, postProcessPending])
+}
+
+/// Vistas y descargas por video y día (UTC). Alimenta las gráficas del Resumen.
+model VideoDailyStat {
+  videoId   String
+  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  day       DateTime @db.Date
+  views     Int      @default(0)
+  downloads Int      @default(0)
+
+  @@id([videoId, day])
+  @@index([day])
 }

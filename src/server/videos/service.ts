@@ -22,6 +22,7 @@ import type {
 } from "../video-providers/types";
 import { toPublicVideo, type PublicVideo } from "./dto";
 import { mediaPath } from "./playback-token";
+import { recordDownload } from "./stats-buffer";
 
 /** Reutilización de URLs firmadas: una vista = render + source + poster. */
 const PLAYBACK_CACHE_MS = 60_000;
@@ -65,6 +66,7 @@ export async function createUpload(
     throw new HttpError(413, `El archivo supera el máximo de ${getCoreEnv().MAX_UPLOAD_MB} MB`);
   }
   if (folderId) await findOwnedFolder(userId, folderId);
+  await assertQuota(userId, input.sizeBytes);
 
   // El proveedor ACTIVO solo decide dónde van las subidas nuevas.
   const adapter = getActiveAdapter();
@@ -87,6 +89,24 @@ export async function createUpload(
   });
 
   return { videoId: publicId, upload: ticket.instructions, thumbnailUpload: ticket.thumbnail };
+}
+
+/** Cuota de almacenamiento por usuario (STORAGE_QUOTA_GB, 0 = sin límite). */
+export const storageQuotaBytes = () => {
+  const gb = getCoreEnv().STORAGE_QUOTA_GB;
+  return gb > 0 ? Math.round(gb * 1024 ** 3) : null;
+};
+
+async function assertQuota(userId: string, incomingBytes: number) {
+  const quota = storageQuotaBytes();
+  if (!quota) return;
+  const { _sum } = await prisma.video.aggregate({
+    where: { userId, status: { not: "ERROR" } },
+    _sum: { sizeBytes: true },
+  });
+  if (Number(_sum.sizeBytes ?? 0) + incomingBytes > quota) {
+    throw new HttpError(413, "Has alcanzado tu límite de almacenamiento. Libera espacio borrando videos.");
+  }
 }
 
 export async function confirmUpload(
@@ -304,6 +324,8 @@ export type EmbedLookup =
       source: PlaybackSource;
       /** Vacío si el dueño (o la configuración global) no permite descargar. */
       downloads: PublicDownloadOption[];
+      /** Ruta firmada a la que el reproductor avisa (una vez) al empezar a reproducir. */
+      viewUrl: string;
     };
 
 export interface PublicDownloadOption {
@@ -337,6 +359,7 @@ export async function getEmbedPlayback(publicId: string): Promise<EmbedLookup> {
     state: "ready",
     publicId,
     downloads,
+    viewUrl: mediaPath(publicId, "view"),
     title: video.title,
     durationSec: video.durationSec,
     source: {
@@ -364,7 +387,9 @@ async function providerPlayback(video: Video): Promise<PlaybackSource> {
 export async function resolveDownload(publicId: string, optionId: string): Promise<DownloadResult | null> {
   const video = await prisma.video.findUnique({ where: { publicId } });
   if (!video || video.status !== "READY" || !downloadsEnabled(video)) return null;
-  return getAdapter(video.provider).getDownloadUrl(refOf(video), video.title, optionId);
+  const result = await getAdapter(video.provider).getDownloadUrl(refOf(video), video.title, optionId);
+  if (result.status === "ready") recordDownload(publicId);
+  return result;
 }
 
 /** Resuelve la URL real (firmada) del proveedor para la ruta `/media`. */

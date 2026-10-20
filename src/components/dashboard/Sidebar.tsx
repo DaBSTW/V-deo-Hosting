@@ -5,7 +5,7 @@ import { APP_NAME } from "@/lib/brand";
 import { formatBytes } from "@/lib/format";
 import { Menu } from "../ui/Menu";
 import {
-  DotsIcon, FolderIcon, FolderPlusIcon, InboxIcon, LibraryIcon, LogoutIcon, PencilIcon, PlayIcon, TrashIcon, UploadIcon,
+  ChartIcon, DotsIcon, FolderIcon, FolderPlusIcon, InboxIcon, LibraryIcon, LogoutIcon, PencilIcon, PlayIcon, TrashIcon, UploadIcon,
 } from "../ui/icons";
 import { DRAG_MIME, type FolderFilter, type PublicFolder } from "./types";
 
@@ -59,6 +59,14 @@ export function Sidebar(p: Props) {
       </div>
 
       <nav className="mt-6 flex-1 overflow-y-auto px-3 pb-4">
+        <NavItem
+          icon={<ChartIcon />}
+          label="Resumen"
+          active={isActive({ kind: "overview" })}
+          onClick={() => p.onFilter({ kind: "overview" })}
+        />
+
+        <div className="mt-6" />
         <SectionTitle>Biblioteca</SectionTitle>
         <NavItem
           icon={<LibraryIcon />}
@@ -172,7 +180,7 @@ function NavItem({
 }: {
   icon: ReactNode;
   label: string;
-  count: number;
+  count?: number;
   active: boolean;
   onClick: () => void;
   onDropVideos?: (ids: string[]) => void;
@@ -204,7 +212,9 @@ function NavItem({
       <button onClick={onClick} className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left text-sm">
         <span className={active ? "text-brand-600" : "text-zinc-400"}>{icon}</span>
         <span className={`min-w-0 flex-1 truncate ${active ? "font-medium text-zinc-900" : "text-zinc-600"}`}>{label}</span>
-        <span className={`text-xs tabular-nums ${active ? "text-zinc-500" : "text-zinc-400"} ${menu ? "group-focus-within/nav:hidden group-hover/nav:hidden" : ""}`}>{count}</span>
+        {count !== undefined && (
+          <span className={`text-xs tabular-nums ${active ? "text-zinc-500" : "text-zinc-400"} ${menu ? "group-focus-within/nav:hidden group-hover/nav:hidden" : ""}`}>{count}</span>
+        )}
       </button>
       {menu && <div className="hidden group-focus-within/nav:block group-hover/nav:block">{menu}</div>}
     </div>

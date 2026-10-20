@@ -56,13 +56,27 @@ export function VideoPlayer({
   source,
   title,
   autoPlay = false,
+  viewUrl,
 }: {
   source: PlaybackSource;
   title: string;
   autoPlay?: boolean;
+  /** Ruta firmada para contar la vista (una vez, al empezar a reproducir). */
+  viewUrl?: string;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [failed, setFailed] = useState(false);
+
+  // Cuenta la vista en la primera reproducción real, no al cargar la página.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !viewUrl) return;
+    const onPlay = () => {
+      if (!navigator.sendBeacon?.(viewUrl)) void fetch(viewUrl, { method: "POST", keepalive: true }).catch(() => {});
+    };
+    video.addEventListener("playing", onPlay, { once: true });
+    return () => video.removeEventListener("playing", onPlay);
+  }, [viewUrl]);
 
   useEffect(() => {
     const video = videoRef.current;

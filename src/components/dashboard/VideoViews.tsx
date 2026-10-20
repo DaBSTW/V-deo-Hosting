@@ -1,7 +1,7 @@
 "use client";
 
 import type { DragEvent } from "react";
-import { formatBytes, formatRelative } from "@/lib/format";
+import { formatBytes, formatCount, formatRelative } from "@/lib/format";
 import { Menu } from "../ui/Menu";
 import { CheckIcon, DotsIcon, FolderIcon } from "../ui/icons";
 import { StatusBadge } from "./StatusBadge";
@@ -98,7 +98,7 @@ export function VideoGrid({ videos, folders, actions, selected, onToggleSelect }
                 <p className="truncate text-sm font-semibold text-zinc-900" title={v.title}>{v.title}</p>
                 <div className="mt-1 flex items-center gap-1.5 text-xs text-zinc-500">
                   {v.status === "ready" ? (
-                    <span>{formatBytes(v.sizeBytes)}</span>
+                    <span>{formatCount(v.views)} {v.views === 1 ? "reproducción" : "reproducciones"}</span>
                   ) : (
                     <StatusBadge status={v.status} />
                   )}
