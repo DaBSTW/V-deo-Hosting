@@ -2,8 +2,8 @@
  * Cliente de subida agnóstico (navegador).
  *
  * El frontend no sabe a qué proveedor sube: recibe del backend unas
- * instrucciones genéricas (`single` = un PUT, `resumable` = protocolo TUS) y
- * las ejecuta. Cambiar de proveedor en el .env no requiere tocar este código.
+ * instrucciones genéricas (`single` = un PUT, `resumable` = protocolo TUS,
+ * `multipart` = partes en paralelo con URLs que se piden por lotes) y las ejecuta. Cambiar de proveedor en el .env no requiere tocar este código.
  */
 import type { ThumbnailUploadInstructions, UploadInstructions } from "@/server/video-providers/types";
 import type { PublicVideo } from "@/server/videos/dto";
@@ -105,6 +105,129 @@ async function resumableUpload(
   });
 }
 
+const PART_CONCURRENCY = 4;
+const PART_URL_BATCH = 20;
+const PART_RETRY_DELAYS_MS = [1000, 3000, 5000, 10000, 20000, 30000];
+
+/** PUT de una parte. Devuelve el código HTTP (0 = error de red). */
+function putPart(
+  url: string,
+  blob: Blob,
+  onLoaded: (bytes: number) => void,
+  xhrs: Set<XMLHttpRequest>,
+): Promise<number> {
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhrs.add(xhr);
+    xhr.open("PUT", url);
+    xhr.upload.onprogress = (e) => onLoaded(e.loaded);
+    const done = (status: number) => {
+      xhrs.delete(xhr);
+      resolve(status);
+    };
+    xhr.onload = () => done(xhr.status);
+    xhr.onerror = () => done(0);
+    xhr.onabort = () => done(-1);
+    xhr.send(blob);
+  });
+}
+
+/**
+ * Subida por partes (archivos grandes, p. ej. 20 GB): varias partes en
+ * paralelo, cada una con sus reintentos, sin cargar el archivo en memoria
+ * (`File.slice` es perezoso). Las URLs se piden por lotes justo antes de
+ * usarlas, así no caducan aunque la subida dure horas.
+ */
+async function multipartUpload(
+  videoId: string,
+  instr: Extract<UploadInstructions, { protocol: "multipart" }>,
+  file: File,
+  cb: UploadCallbacks,
+): Promise<void> {
+  const { partSizeBytes, partCount } = instr;
+  const urls = new Map<number, string>();
+  const loaded = new Map<number, number>();
+  const xhrs = new Set<XMLHttpRequest>();
+  let pendingBatch: Promise<void> | null = null;
+  let nextPart = 1;
+  let failure: unknown = null;
+
+  const report = () => {
+    let sum = 0;
+    for (const b of loaded.values()) sum += b;
+    cb.onProgress(Math.min(1, sum / file.size));
+  };
+  const onAbort = () => xhrs.forEach((x) => x.abort());
+  cb.signal.addEventListener("abort", onAbort, { once: true });
+  const checkAbort = () => {
+    if (cb.signal.aborted) throw new UploadAbortedError();
+    if (failure) throw failure; // otra parte falló sin remedio: se para todo
+  };
+
+  const urlFor = async (n: number): Promise<string> => {
+    while (!urls.has(n)) {
+      pendingBatch ??= (async () => {
+        const parts: number[] = [];
+        for (let k = n; k <= partCount && parts.length < PART_URL_BATCH; k++) if (!urls.has(k)) parts.push(k);
+        const res = await api<{ urls: Record<string, string> }>("/api/videos/upload-parts", { videoId, parts });
+        for (const [k, u] of Object.entries(res.urls)) urls.set(Number(k), u);
+      })().finally(() => (pendingBatch = null));
+      await pendingBatch;
+    }
+    return urls.get(n)!;
+  };
+
+  const uploadPart = async (n: number) => {
+    const start = (n - 1) * partSizeBytes;
+    const blob = file.slice(start, Math.min(start + partSizeBytes, file.size));
+    for (let attempt = 0; ; attempt++) {
+      checkAbort();
+      let status = 0;
+      try {
+        status = await putPart(await urlFor(n), blob, (b) => (loaded.set(n, b), report()), xhrs);
+      } catch (err) {
+        if (err instanceof ApiError && err.status < 500 && err.status !== 429) throw err;
+      }
+      checkAbort();
+      if (status >= 200 && status < 300) {
+        loaded.set(n, blob.size);
+        report();
+        return;
+      }
+      loaded.set(n, 0);
+      // 403 = URL caducada: se pide otra. Otros 4xx (salvo 408/429) no se arreglan reintentando.
+      if (status === 403) urls.delete(n);
+      else if (status >= 400 && status < 500 && status !== 408 && status !== 429) {
+        throw new UploadError("failedStatus", { status });
+      }
+      if (attempt >= PART_RETRY_DELAYS_MS.length) {
+        throw status ? new UploadError("failedStatus", { status }) : new UploadError("network");
+      }
+      await new Promise((r) => setTimeout(r, PART_RETRY_DELAYS_MS[attempt]));
+    }
+  };
+
+  const worker = async () => {
+    while (!failure && nextPart <= partCount) {
+      const n = nextPart++;
+      try {
+        await uploadPart(n);
+      } catch (err) {
+        failure ??= err;
+        onAbort(); // corta las demás partes en curso
+      }
+    }
+  };
+
+  try {
+    await Promise.all(Array.from({ length: Math.min(PART_CONCURRENCY, partCount) }, worker));
+  } finally {
+    cb.signal.removeEventListener("abort", onAbort);
+  }
+  if (cb.signal.aborted) throw new UploadAbortedError();
+  if (failure) throw failure;
+}
+
 /** Sube la miniatura capturada. Es "best effort": si falla, se usa el respaldo. */
 async function putThumbnail(instr: ThumbnailUploadInstructions, blob: Blob, signal: AbortSignal) {
   if (blob.size > instr.maxBytes) return false;
@@ -148,6 +271,7 @@ export async function uploadVideo(
       : Promise.resolve(false);
 
   if (upload.protocol === "single") await putFile(upload, file, cb);
+  else if (upload.protocol === "multipart") await multipartUpload(videoId, upload, file, cb);
   else await resumableUpload(upload, file, cb);
   cb.onProgress(1);
   const hasThumbnail = await thumbTask;

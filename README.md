@@ -80,6 +80,7 @@ workers/r2-event-forwarder               (opcional) Worker: eventos R2 → webho
 | `POST`   | `/api/auth/logout`           | Cierra la sesión |
 | `GET`    | `/api/videos`                | Lista de videos del usuario (DTO público) |
 | `POST`   | `/api/videos/upload-url`     | `{ title, fileName, sizeBytes, mimeType, folderId? }` → `{ videoId, upload, thumbnailUpload? }` |
+| `POST`   | `/api/videos/upload-parts`   | `{ videoId, parts[] }` → `{ urls }`: URLs firmadas para las partes de una subida grande (máx. 50 por llamada) |
 | `POST`   | `/api/videos/confirm`        | `{ videoId, durationSec?, hasThumbnail? }` → verifica con el proveedor y activa el video |
 | `GET`    | `/api/videos/:publicId`      | Detalle de un video |
 | `PATCH`  | `/api/videos/:publicId`      | `{ title?, folderId?, allowDownload? }` → renombrar / mover / permitir descarga |
@@ -410,6 +411,19 @@ Tareas periódicas recomendadas (cron):
 
 ---
 
+## Archivos grandes (hasta 20 GB)
+
+El límite por archivo es `MAX_UPLOAD_MB` (por defecto 20480 = 20 GB). El archivo **nunca pasa por el VPS**:
+
+* **R2**: un PUT único admite ~5 GB, así que a partir de `R2_MULTIPART_THRESHOLD_MB` (1 GB) la subida va
+  **por partes** (`protocol: "multipart"`). El navegador sube 4 partes en paralelo (64 MB cada una por
+  defecto, `R2_MULTIPART_PART_MB`), con reintentos por parte y sin cargar el archivo en memoria. Las URLs de
+  cada parte se piden por lotes a `/api/videos/upload-parts` justo antes de usarlas, así no caducan aunque la
+  subida dure horas. Al confirmar, el backend lista las partes en R2, comprueba tamaños y completa el objeto
+  (el `UploadId` solo vive en la base de datos). Borrar el video aborta la subida pendiente.
+  El CORS del bucket no necesita cambios (basta `PUT`).
+* **Stream**: subida reanudable (TUS); el máximo del proveedor es 30 GB.
+
 ## Seguridad
 
 * Sesiones JWT HS256 en cookie `httpOnly`, `SameSite=Lax` y `Secure` en producción. Contraseñas con bcrypt (coste 12).
@@ -424,7 +438,9 @@ Tareas periódicas recomendadas (cron):
 
 ## Limitaciones conocidas
 
-* R2 con una sola URL `PUT` admite hasta 5 GB por archivo. Para más, habría que implementar subida
-  multiparte prefirmada en el adaptador. La interfaz ya lo permite con otro valor de `protocol`.
+* Una subida por partes interrumpida (pestaña cerrada) no se reanuda: hay que volver a subir el archivo.
+  Las partes huérfanas se limpian con `cleanup-stale-uploads` (y R2 aborta solo las incompletas a los 7 días).
+* El worker HLS descarga el original a disco para procesarlo: con archivos de 20 GB, deja al menos el
+  doble de espacio libre en su directorio temporal.
 * Cambiar `VIDEO_PROVIDER` requiere reiniciar el proceso de Node (las variables de entorno se leen al arrancar).
 * El worker HLS gasta CPU del VPS. En máquinas pequeñas, limita su concurrencia (procesa un video cada vez) o usa Stream.

@@ -39,8 +39,10 @@ export interface UploadRequest {
 
 /**
  * Instrucciones de subida que viajan al navegador. Son deliberadamente
- * genéricas: el cliente solo sabe "haz un PUT a esta URL" o "usa subida
- * reanudable contra esta URL". No hay credenciales ni nombres de proveedor.
+ * genéricas: el cliente solo sabe "haz un PUT a esta URL", "usa subida
+ * reanudable contra esta URL" o "sube el archivo en partes de N bytes" (las
+ * URL de cada parte se piden a nuestra API justo antes de usarlas). No hay
+ * credenciales ni nombres de proveedor.
  */
 export type UploadInstructions =
   | {
@@ -55,6 +57,12 @@ export type UploadInstructions =
       url: string;
       chunkSizeBytes: number;
       expiresAt: string;
+    }
+  | {
+      protocol: "multipart";
+      /** Todas las partes miden esto salvo la última. */
+      partSizeBytes: number;
+      partCount: number;
     };
 
 /** Subida de la miniatura que el navegador extrae del propio archivo. */
@@ -150,6 +158,12 @@ export interface VideoProviderAdapter {
    * estado resultante (READY / PROCESSING / ERROR / PENDING_UPLOAD si aún no llegó).
    */
   confirmUpload(ref: ProviderVideoRef, hints: ConfirmHints): Promise<ProviderVideoState>;
+
+  /**
+   * Solo para subidas `multipart`: URL firmadas para subir las partes indicadas
+   * (números desde 1). Se piden por lotes durante la subida para que no caduquen.
+   */
+  getUploadPartUrls?(ref: ProviderVideoRef, partNumbers: number[]): Promise<Record<number, string>>;
 
   /** Consulta activa del estado (fallback cuando no llegan webhooks). */
   getStatus(ref: ProviderVideoRef): Promise<ProviderVideoState>;

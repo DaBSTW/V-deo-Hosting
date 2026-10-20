@@ -648,7 +648,7 @@ const en: Messages = {
     registrationDisabled: "Registration is disabled",
     emailTaken: "An account with that email already exists",
     invalidCredentials: "Incorrect email or password",
-    fileTooLarge: "The file exceeds the maximum of {maxMb} MB",
+    fileTooLarge: "The file exceeds the maximum of {max}",
     storageQuotaReached: "You’ve reached your storage limit. Free up space by deleting videos.",
     uploadNotFinished: "The upload hasn’t finished yet",
     videoNotFound: "Video not found",

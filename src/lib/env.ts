@@ -61,7 +61,8 @@ const coreSchema = z.object({
   JWT_SECRET: z.string().min(32, "JWT_SECRET debe tener al menos 32 caracteres"),
   /** Interruptor global del proveedor de medios para NUEVAS subidas. */
   VIDEO_PROVIDER: z.enum(["R2", "STREAM"]).default("R2"),
-  MAX_UPLOAD_MB: z.coerce.number().int().positive().default(5000),
+  /** Tamaño máximo por archivo (MB). 20 GB por defecto; con R2 los archivos grandes se suben por partes. */
+  MAX_UPLOAD_MB: z.coerce.number().int().positive().default(20 * 1024),
   /** Validez de las URLs de reproducción firmadas (segundos). */
   PLAYBACK_URL_TTL_SEC: z.coerce.number().int().min(60).default(6 * 3600),
   /** Orígenes autorizados a incrustar el reproductor (`*` = cualquiera). */
@@ -123,6 +124,10 @@ const r2Schema = z
      * ocupa espacio extra en R2.
      */
     R2_HLS_DOWNLOAD_RENDITIONS: bool(true),
+    /** A partir de este tamaño (MB) la subida va por partes en paralelo (un PUT único admite ~5 GB). */
+    R2_MULTIPART_THRESHOLD_MB: z.coerce.number().int().min(5).max(5000).default(1024),
+    /** Tamaño de cada parte (MB). Crece solo si el archivo necesitara más de 10 000 partes. */
+    R2_MULTIPART_PART_MB: z.coerce.number().int().min(5).max(5000).default(64),
     /** Secreto HMAC del Worker que reenvía las notificaciones de eventos R2. */
     R2_WEBHOOK_SECRET: optionalString,
   })

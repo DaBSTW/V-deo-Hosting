@@ -35,6 +35,15 @@ const MAX_POLL_PER_REQUEST = 5;
 
 export const maxUploadBytes = () => getCoreEnv().MAX_UPLOAD_MB * 1024 * 1024;
 
+/** "20 GB" / "500 MB" para los mensajes de error. */
+const maxUploadLabel = () => {
+  const mb = getCoreEnv().MAX_UPLOAD_MB;
+  return mb >= 1024 ? `${Math.round((mb / 1024) * 10) / 10} GB` : `${mb} MB`;
+};
+
+/** Partes que el navegador puede pedir por llamada (subida multipart). */
+export const MAX_PART_URLS_PER_REQUEST = 50;
+
 const refOf = (v: Video): ProviderVideoRef => ({
   providerVideoId: v.providerVideoId,
   providerMeta: (v.providerMeta as ProviderMeta | null) ?? null,
@@ -64,7 +73,7 @@ export async function createUpload(
   { folderId, ...input }: CreateUploadInput,
 ): Promise<UploadTicketResponse> {
   if (input.sizeBytes > maxUploadBytes()) {
-    throw new HttpError(413, "fileTooLarge", { maxMb: getCoreEnv().MAX_UPLOAD_MB });
+    throw new HttpError(413, "fileTooLarge", { max: maxUploadLabel() });
   }
   if (folderId) await findOwnedFolder(userId, folderId);
   await assertQuota(userId, input.sizeBytes);
@@ -90,6 +99,28 @@ export async function createUpload(
   });
 
   return { videoId: publicId, upload: ticket.instructions, thumbnailUpload: ticket.thumbnail };
+}
+
+/**
+ * URLs firmadas para las partes de una subida multipart en curso. Se piden por
+ * lotes mientras se sube, así no caducan aunque el archivo tarde horas.
+ */
+export async function getUploadPartUrls(
+  userId: string,
+  publicId: string,
+  partNumbers: number[],
+): Promise<Record<number, string>> {
+  const video = await findOwned(userId, publicId);
+  const meta = (video.providerMeta as ProviderMeta | null) ?? {};
+  const partSize = Number(meta.partSize) || 0;
+  const adapter = getAdapter(video.provider);
+  if (video.status !== "PENDING_UPLOAD" || !meta.uploadId || !partSize || !adapter.getUploadPartUrls) {
+    throw new HttpError(409, "uploadNotFinished");
+  }
+  const partCount = Math.ceil(Number(video.sizeBytes) / partSize);
+  const valid = [...new Set(partNumbers)].filter((n) => Number.isInteger(n) && n >= 1 && n <= partCount);
+  if (valid.length === 0) throw new HttpError(400, "nothingToUpdate");
+  return adapter.getUploadPartUrls(refOf(video), valid.slice(0, MAX_PART_URLS_PER_REQUEST));
 }
 
 /** Cuota de almacenamiento por usuario (STORAGE_QUOTA_GB, 0 = sin límite). */

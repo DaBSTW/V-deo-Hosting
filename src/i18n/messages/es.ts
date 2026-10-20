@@ -650,7 +650,7 @@ const es = {
     registrationDisabled: "El registro está deshabilitado",
     emailTaken: "Ya existe una cuenta con ese email",
     invalidCredentials: "Email o contraseña incorrectos",
-    fileTooLarge: "El archivo supera el máximo de {maxMb} MB",
+    fileTooLarge: "El archivo supera el máximo de {max}",
     storageQuotaReached: "Has alcanzado tu límite de almacenamiento. Libera espacio borrando videos.",
     uploadNotFinished: "La subida aún no ha finalizado",
     videoNotFound: "Video no encontrado",

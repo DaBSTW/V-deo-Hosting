@@ -1,7 +1,10 @@
 /**
  * Adaptador Cloudflare R2 (API compatible con S3).
  *
- *  - Subida: URL prefirmada `PUT` → el navegador sube directo al bucket.
+ *  - Subida: URL prefirmada `PUT` → el navegador sube directo al bucket. Los
+ *    archivos grandes (≥ R2_MULTIPART_THRESHOLD_MB) van por partes (multipart):
+ *    el navegador sube varias partes en paralelo con URLs firmadas que pide por
+ *    lotes, y al confirmar el backend lista las partes y completa el objeto.
  *  - Reproducción:
  *      a) `R2_PUBLIC_BASE_URL` (dominio propio conectado al bucket): sirve el
  *         archivo / HLS desde tu dominio con la caché de Cloudflare.
@@ -25,12 +28,18 @@
  *    videos/<token>/poster.jpg       miniatura (opcional)
  */
 import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectsCommand,
   GetObjectCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
+  ListPartsCommand,
+  type Part,
   PutObjectCommand,
   S3Client,
+  UploadPartCommand,
   S3ServiceException,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -54,6 +63,9 @@ import type {
 } from "./types";
 
 const UPLOAD_URL_TTL_SEC = 60 * 60;
+const MiB = 1024 * 1024;
+/** Límite de partes de una subida multipart (S3 / R2). */
+const MAX_PARTS = 10_000;
 const THUMBNAIL_MAX_BYTES = 2 * 1024 * 1024;
 /** Basta con que la descarga EMPIECE antes de caducar; luego continúa. */
 const DOWNLOAD_URL_TTL_SEC = 15 * 60;
@@ -123,13 +135,38 @@ export class CloudflareR2Adapter implements VideoProviderAdapter {
         expiresIn: UPLOAD_URL_TTL_SEC,
       });
 
-    const [url, thumbUrl] = await this.wrap("presign upload", () =>
-      Promise.all([
-        presignPut(key, req.mimeType),
-        presignPut(`${CloudflareR2Adapter.folderOf(key)}/poster.jpg`, "image/jpeg"),
-      ]),
+    const thumbUrl = await this.wrap("presign upload", () =>
+      presignPut(`${CloudflareR2Adapter.folderOf(key)}/poster.jpg`, "image/jpeg"),
     );
+    const thumbnail = {
+      method: "PUT" as const,
+      url: thumbUrl,
+      headers: { "Content-Type": "image/jpeg" },
+      maxBytes: THUMBNAIL_MAX_BYTES,
+    };
 
+    if (req.sizeBytes >= this.env.R2_MULTIPART_THRESHOLD_MB * MiB) {
+      const partSizeBytes = this.partSizeFor(req.sizeBytes);
+      const { UploadId } = await this.wrap("create multipart upload", () =>
+        this.s3.send(
+          new CreateMultipartUploadCommand({ Bucket: this.env.R2_BUCKET, Key: key, ContentType: req.mimeType }),
+        ),
+      );
+      if (!UploadId) throw new ProviderError("R2 no devolvió UploadId");
+      return {
+        providerVideoId: key,
+        // Solo en la DB: el navegador nunca ve el UploadId.
+        providerMeta: { uploadId: UploadId, partSize: partSizeBytes },
+        instructions: {
+          protocol: "multipart",
+          partSizeBytes,
+          partCount: Math.ceil(req.sizeBytes / partSizeBytes),
+        },
+        thumbnail,
+      };
+    }
+
+    const url = await this.wrap("presign upload", () => presignPut(key, req.mimeType));
     return {
       providerVideoId: key,
       instructions: {
@@ -140,18 +177,106 @@ export class CloudflareR2Adapter implements VideoProviderAdapter {
         headers: { "Content-Type": req.mimeType },
         expiresAt: new Date(Date.now() + UPLOAD_URL_TTL_SEC * 1000).toISOString(),
       },
-      thumbnail: {
-        method: "PUT",
-        url: thumbUrl,
-        headers: { "Content-Type": "image/jpeg" },
-        maxBytes: THUMBNAIL_MAX_BYTES,
-      },
+      thumbnail,
     };
+  }
+
+  /** Partes de tamaño fijo (R2 lo exige), en MiB enteros y sin pasar de 10 000. */
+  private partSizeFor(sizeBytes: number): number {
+    const minForCount = Math.ceil(sizeBytes / MAX_PARTS / MiB) * MiB;
+    return Math.max(this.env.R2_MULTIPART_PART_MB * MiB, minForCount);
+  }
+
+  async getUploadPartUrls(ref: ProviderVideoRef, partNumbers: number[]): Promise<Record<number, string>> {
+    const uploadId = multipartIdOf(ref);
+    if (!uploadId) throw new ProviderError("El video no tiene una subida por partes en curso");
+    const urls = await this.wrap("presign upload part", () =>
+      Promise.all(
+        partNumbers.map((PartNumber) =>
+          getSignedUrl(
+            this.s3,
+            new UploadPartCommand({ Bucket: this.env.R2_BUCKET, Key: ref.providerVideoId, UploadId: uploadId, PartNumber }),
+            { expiresIn: UPLOAD_URL_TTL_SEC },
+          ),
+        ),
+      ),
+    );
+    return Object.fromEntries(partNumbers.map((n, i) => [n, urls[i]]));
+  }
+
+  /**
+   * Une las partes subidas por el navegador. Devuelve `false` si aún faltan
+   * partes (el cliente reintenta la confirmación). Las ETag se leen de R2 con
+   * ListParts, así que el navegador no necesita leer cabeceras de respuesta.
+   */
+  private async completeMultipart(ref: ProviderVideoRef, uploadId: string, declaredSize: number): Promise<boolean> {
+    const partSize = Number(ref.providerMeta?.partSize) || 0;
+    const expected = partSize > 0 ? Math.ceil(declaredSize / partSize) : 0;
+    const parts: Part[] = [];
+    let marker: string | undefined;
+    try {
+      do {
+        const page = await this.s3.send(
+          new ListPartsCommand({
+            Bucket: this.env.R2_BUCKET,
+            Key: ref.providerVideoId,
+            UploadId: uploadId,
+            PartNumberMarker: marker,
+          }),
+        );
+        parts.push(...(page.Parts ?? []));
+        marker = page.IsTruncated ? page.NextPartNumberMarker : undefined;
+      } while (marker);
+    } catch (err) {
+      // Subida ya completada (o abortada): el HEAD posterior decide.
+      if (err instanceof S3ServiceException && err.name === "NoSuchUpload") return true;
+      throw new ProviderError("R2 ListParts falló", { cause: err, retryable: true });
+    }
+
+    const byNumber = new Map(parts.map((p) => [p.PartNumber, p]));
+    for (let n = 1; n <= expected; n++) {
+      const part = byNumber.get(n);
+      const want = n < expected ? partSize : declaredSize - partSize * (expected - 1);
+      if (!part || Number(part.Size) !== want) return false;
+    }
+    await this.wrap("complete multipart upload", () =>
+      this.s3.send(
+        new CompleteMultipartUploadCommand({
+          Bucket: this.env.R2_BUCKET,
+          Key: ref.providerVideoId,
+          UploadId: uploadId,
+          MultipartUpload: {
+            Parts: Array.from({ length: expected }, (_, i) => ({
+              PartNumber: i + 1,
+              ETag: byNumber.get(i + 1)!.ETag,
+            })),
+          },
+        }),
+      ),
+    );
+    return true;
+  }
+
+  private async abortMultipart(ref: ProviderVideoRef): Promise<void> {
+    const uploadId = multipartIdOf(ref);
+    if (!uploadId) return;
+    try {
+      await this.s3.send(
+        new AbortMultipartUploadCommand({ Bucket: this.env.R2_BUCKET, Key: ref.providerVideoId, UploadId: uploadId }),
+      );
+    } catch {
+      // Ya completada o abortada; R2 también aborta sola las incompletas a los 7 días.
+    }
   }
 
   // -------------------------------------------------------------------------
   async confirmUpload(ref: ProviderVideoRef, hints: ConfirmHints): Promise<ProviderVideoState> {
-    const head = await this.head(ref.providerVideoId);
+    let head = await this.head(ref.providerVideoId);
+    const uploadId = multipartIdOf(ref);
+    if (!head && uploadId) {
+      if (!(await this.completeMultipart(ref, uploadId, hints.declaredSizeBytes))) return { status: "PENDING_UPLOAD" };
+      head = await this.head(ref.providerVideoId);
+    }
     if (!head) return { status: "PENDING_UPLOAD" };
 
     const size = head.size;
@@ -174,7 +299,8 @@ export class CloudflareR2Adapter implements VideoProviderAdapter {
       sizeBytes: size,
       durationSec: sanitizeDuration(hints.clientDurationSec),
       postProcess: this.env.R2_HLS_ENABLED,
-      providerMeta: { hls: false, poster },
+      // `uploadId: null`: la subida por partes ya se completó.
+      providerMeta: { hls: false, poster, ...(uploadId ? { uploadId: null, partSize: null } : {}) },
       hasThumbnail: poster || this.env.R2_MEDIA_TRANSFORMATIONS,
     };
   }
@@ -315,6 +441,7 @@ export class CloudflareR2Adapter implements VideoProviderAdapter {
       throw new ProviderError(`Clave de objeto inesperada: ${ref.providerVideoId}`);
     }
 
+    await this.abortMultipart(ref);
     await this.wrap("delete", async () => {
       let token: string | undefined;
       do {
@@ -394,6 +521,12 @@ export class CloudflareR2Adapter implements VideoProviderAdapter {
       throw new ProviderError(`R2 ${op} falló`, { cause: err, retryable: true });
     }
   }
+}
+
+/** UploadId de una subida por partes aún sin completar (solo en la DB). */
+function multipartIdOf(ref: ProviderVideoRef): string | null {
+  const id = ref.providerMeta?.uploadId;
+  return typeof id === "string" && id ? id : null;
 }
 
 /** Calidades MP4 descargables generadas por el worker (`providerMeta.downloads`). */
