@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { SiteFooter } from "@/components/legal/SiteFooter";
 import { WatchActions } from "@/components/watch/WatchActions";
 import { APP_NAME } from "@/lib/brand";
-import { formatDuration } from "@/lib/format";
+import { makeFormatters } from "@/lib/format";
+import { getLocale } from "next-intl/server";
 import { embedUrlFor } from "@/server/videos/dto";
 import { AdSlot, EmbedBody, loadEmbed } from "@/server/videos/embed-view";
 import { getCoreEnv } from "@/lib/env";
@@ -19,12 +21,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function WatchPage({ params }: Props) {
   const { publicId } = await params;
   const data = await loadEmbed(publicId);
+  const { formatDuration } = makeFormatters(await getLocale());
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
+    <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100">
       <header className="mx-auto max-w-5xl px-4 py-4 text-sm font-semibold tracking-tight text-zinc-400 sm:px-6">
         {APP_NAME}
       </header>
-      <main className="mx-auto max-w-5xl px-4 pb-12 sm:px-6">
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-12 sm:px-6">
         <div className="aspect-video w-full overflow-hidden rounded-xl bg-black shadow-2xl ring-1 ring-white/10">
           <EmbedBody data={data} />
         </div>
@@ -41,6 +44,7 @@ export default async function WatchPage({ params }: Props) {
           />
         )}
       </main>
+      <SiteFooter dark compact />
       <AdSlot data={data} />
     </div>
   );

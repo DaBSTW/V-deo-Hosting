@@ -7,14 +7,10 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import type { Tier } from "./tiers";
 
-export const PAYOUT_METHODS = {
-  PAYPAL: { label: "PayPal", detailsLabel: "Email de PayPal", placeholder: "tu@email.com" },
-  USDT_TRC20: { label: "USDT (TRC20)", detailsLabel: "Dirección de wallet TRC20", placeholder: "T…" },
-  PAYONEER: { label: "Payoneer", detailsLabel: "Email de Payoneer", placeholder: "tu@email.com" },
-  BANK: { label: "Transferencia bancaria", detailsLabel: "Titular, banco, IBAN/CLABE y SWIFT", placeholder: "Titular · Banco · IBAN/CLABE · SWIFT" },
-} as const;
-export type PayoutMethod = keyof typeof PAYOUT_METHODS;
-const methodIds = Object.keys(PAYOUT_METHODS) as [PayoutMethod, ...PayoutMethod[]];
+/** Métodos de cobro (sus nombres se traducen en la interfaz). */
+export const PAYOUT_METHOD_IDS = ["PAYPAL", "USDT_TRC20", "PAYONEER", "BANK"] as const;
+export type PayoutMethod = (typeof PAYOUT_METHOD_IDS)[number];
+const methodIds = [...PAYOUT_METHOD_IDS] as [PayoutMethod, ...PayoutMethod[]];
 
 /** Mínimo de retiro de la plataforma: ningún método puede bajar de aquí. */
 export const MIN_PAYOUT_USD = 25;
@@ -33,7 +29,7 @@ export const monetizationSettingsSchema = z.object({
   /** Métodos de cobro activos y su mínimo en USD. */
   payoutMethods: z.record(
     z.enum(methodIds),
-    z.object({ enabled: z.boolean(), minUsd: z.number().min(MIN_PAYOUT_USD, `El mínimo de retiro no puede ser menor de ${MIN_PAYOUT_USD} USD`).max(10_000) }),
+    z.object({ enabled: z.boolean(), minUsd: z.number().min(MIN_PAYOUT_USD, "minPayoutFloor").max(10_000) }),
   ),
   /** Etiqueta <meta> de verificación del sitio que da Monetag (se inserta en <head>). */
   monetagMetaTag: z.string().max(2_000),

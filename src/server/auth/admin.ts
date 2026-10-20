@@ -7,6 +7,6 @@ export const isAdmin = (email: string) => getCoreEnv().ADMIN_EMAILS.includes(ema
 
 export async function requireApiAdmin(): Promise<SessionUser> {
   const user = await requireApiUser();
-  if (!isAdmin(user.email)) throw new HttpError(403, "Solo para administradores");
+  if (!isAdmin(user.email)) throw new HttpError(403, "adminOnly");
   return user;
 }

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Dialogs, type DialogState } from "../ui/Dialogs";
 import { Menu } from "../ui/Menu";
 import {
@@ -29,7 +30,8 @@ async function api<T = unknown>(path: string, init?: RequestInit): Promise<T> {
   });
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.details?.[0] ?? data.error ?? "No se pudo completar la operación");
+  // El servidor devuelve el mensaje ya traducido; sin él, el componente usa uno genérico.
+  if (!res.ok) throw new Error(data.details?.[0] ?? data.error ?? "");
   return data as T;
 }
 
@@ -48,6 +50,7 @@ export function DashboardApp({
   initialFilter,
   initialStats,
   maxBytes,
+  footer,
 }: {
   user: { email: string; name: string | null; isAdmin: boolean };
   initialVideos: PublicVideo[];
@@ -55,8 +58,13 @@ export function DashboardApp({
   initialFilter: FolderFilter;
   initialStats: DashboardStats;
   maxBytes: number;
+  /** Footer legal renderizado en el servidor. */
+  footer?: React.ReactNode;
 }) {
   const router = useRouter();
+  const t = useTranslations("dashboard");
+  const tc = useTranslations("common");
+  const errMsg = (err: unknown) => (err as Error).message || tc("requestFailed");
   const [videos, setVideos] = useState(initialVideos);
   const [folders, setFolders] = useState(initialFolders);
   const [filter, setFilter] = useState<FolderFilter>(initialFilter);
@@ -112,17 +120,7 @@ export function DashboardApp({
   /** Vistas que no son de biblioteca (sin búsqueda, orden ni selección). */
   const isPanel = isOverview || filter.kind === "monetization" || filter.kind === "admin";
   const title =
-    filter.kind === "overview"
-      ? "Resumen"
-      : filter.kind === "monetization"
-        ? "Monetización"
-        : filter.kind === "admin"
-          ? "Administración"
-          : filter.kind === "all"
-        ? "Todos los videos"
-        : filter.kind === "none"
-          ? "Sin carpeta"
-          : currentFolder?.name ?? "";
+    filter.kind === "folder" ? (currentFolder?.name ?? "") : t(`titles.${filter.kind}`);
 
   // Estadísticas: se refrescan al volver al Resumen y cada minuto mientras está abierto.
   const refreshStats = useCallback(async () => {
@@ -189,12 +187,12 @@ export function DashboardApp({
     async (text: string, what: string) => {
       try {
         await navigator.clipboard.writeText(text);
-        notify(`${what} copiado`);
+        notify(t("toast.copied", { what }));
       } catch {
-        window.prompt(`Copia el ${what.toLowerCase()}:`, text);
+        window.prompt(t("copyPrompt", { what }), text);
       }
     },
-    [notify],
+    [notify, t],
   );
 
   const move = useCallback(
@@ -204,14 +202,14 @@ export function DashboardApp({
       setSelected(new Set());
       try {
         await api("/api/videos/move", { method: "POST", body: JSON.stringify({ videoIds: ids, folderId }) });
-        const dest = folderId ? folders.find((f) => f.id === folderId)?.name : "Sin carpeta";
-        notify(`${ids.length === 1 ? "Video movido" : `${ids.length} videos movidos`} a «${dest}»`);
+        const dest = folderId ? folders.find((f) => f.id === folderId)?.name : t("titles.none");
+        notify(t("toast.moved", { count: ids.length, dest: dest ?? "" }));
       } catch (err) {
         setVideos(before);
-        notify((err as Error).message);
+        notify(errMsg(err));
       }
     },
-    [videos, folders, notify],
+    [videos, folders, notify, t, tc],
   );
 
   const deleteMany = useCallback(
@@ -223,29 +221,29 @@ export function DashboardApp({
           ok++;
           setVideos((prev) => prev.filter((v) => v.id !== id));
         } catch (err) {
-          notify((err as Error).message);
+          notify(errMsg(err));
         }
       }
       setSelected(new Set());
       setOpenId((cur) => (cur && ids.includes(cur) ? null : cur));
-      if (ok) notify(ok === 1 ? "Video eliminado" : `${ok} videos eliminados`);
+      if (ok) notify(t("toast.deleted", { count: ok }));
     },
-    [notify],
+    [notify, t, tc],
   );
 
   const actions: VideoActions = useMemo(
     () => ({
       open: (v) => setOpenId(v.id),
-      copyIframe: (v) => copy(v.iframe, "Código iFrame"),
-      copyLink: (v) => copy(v.watchUrl, "Enlace"),
+      copyIframe: (v) => copy(v.iframe, t("what.iframe")),
+      copyLink: (v) => copy(v.watchUrl, t("what.link")),
       move,
       rename: (v) =>
         setDialog({
           kind: "prompt",
-          title: "Renombrar video",
-          label: "Título",
+          title: t("dialogs.renameVideo"),
+          label: t("dialogs.title"),
           initial: v.title,
-          confirmLabel: "Guardar",
+          confirmLabel: tc("save"),
           onSubmit: async (title) => {
             try {
               const { video } = await api<{ video: PublicVideo }>(`/api/videos/${v.id}`, {
@@ -255,7 +253,7 @@ export function DashboardApp({
               setVideos((prev) => prev.map((x) => (x.id === video.id ? video : x)));
               return true;
             } catch (err) {
-              notify((err as Error).message);
+              notify(errMsg(err));
               return false;
             }
           },
@@ -264,23 +262,23 @@ export function DashboardApp({
         setVideos((prev) => prev.map((x) => (x.id === v.id ? { ...x, allowDownload: allow } : x)));
         try {
           await api(`/api/videos/${v.id}`, { method: "PATCH", body: JSON.stringify({ allowDownload: allow }) });
-          notify(allow ? "Descarga activada" : "Descarga desactivada");
+          notify(allow ? t("toast.downloadOn") : t("toast.downloadOff"));
         } catch (err) {
           setVideos((prev) => prev.map((x) => (x.id === v.id ? { ...x, allowDownload: !allow } : x)));
-          notify((err as Error).message);
+          notify(errMsg(err));
         }
       },
       remove: (v) =>
         setDialog({
           kind: "confirm",
-          title: "Eliminar video",
-          message: `Se eliminará «${v.title}» de forma permanente y su código de inserción dejará de funcionar.`,
-          confirmLabel: "Eliminar",
+          title: t("dialogs.deleteVideo"),
+          message: t("dialogs.deleteVideoMsg", { title: v.title }),
+          confirmLabel: tc("delete"),
           danger: true,
           onConfirm: () => deleteMany([v.id]),
         }),
     }),
-    [copy, move, deleteMany, notify],
+    [copy, move, deleteMany, notify, t, tc],
   );
 
   // ------------------------------------------------------------------ carpetas
@@ -294,7 +292,7 @@ export function DashboardApp({
       changeFilter({ kind: "folder", id: folder.id });
       return true;
     } catch (err) {
-      notify((err as Error).message);
+      notify(errMsg(err));
       return false;
     }
   };
@@ -302,11 +300,11 @@ export function DashboardApp({
   const renameFolder = (f: PublicFolder) =>
     setDialog({
       kind: "prompt",
-      title: "Renombrar carpeta",
-      label: "Nombre",
+      title: t("dialogs.renameFolder"),
+      label: t("dialogs.name"),
       initial: f.name,
       maxLength: 60,
-      confirmLabel: "Guardar",
+      confirmLabel: tc("save"),
       onSubmit: async (name) => {
         try {
           const { folder } = await api<{ folder: PublicFolder }>(`/api/folders/${f.id}`, {
@@ -316,7 +314,7 @@ export function DashboardApp({
           setFolders((prev) => prev.map((x) => (x.id === folder.id ? folder : x)).sort((a, b) => a.name.localeCompare(b.name, "es")));
           return true;
         } catch (err) {
-          notify((err as Error).message);
+          notify(errMsg(err));
           return false;
         }
       },
@@ -325,18 +323,18 @@ export function DashboardApp({
   const deleteFolder = (f: PublicFolder) =>
     setDialog({
       kind: "confirm",
-      title: "Eliminar carpeta",
-      message: `Se eliminará la carpeta «${f.name}». Sus ${counts.byFolder.get(f.id) ?? 0} videos no se borran: pasarán a «Sin carpeta».`,
-      confirmLabel: "Eliminar carpeta",
+      title: t("dialogs.deleteFolder"),
+      message: t("dialogs.deleteFolderMsg", { name: f.name, count: counts.byFolder.get(f.id) ?? 0 }),
+      confirmLabel: t("dialogs.deleteFolder"),
       danger: true,
       onConfirm: async () => {
         try {
           await api(`/api/folders/${f.id}`, { method: "DELETE" });
           setFolders((prev) => prev.filter((x) => x.id !== f.id));
           setVideos((prev) => prev.map((v) => (v.folderId === f.id ? { ...v, folderId: null } : v)));
-          notify("Carpeta eliminada");
+          notify(t("toast.folderDeleted"));
         } catch (err) {
-          notify((err as Error).message);
+          notify(errMsg(err));
         }
       },
     });
@@ -430,7 +428,7 @@ export function DashboardApp({
         {/* Barra superior */}
         <header className="sticky top-0 z-10 border-b border-zinc-200/80 bg-white/80 backdrop-blur-md">
           <div className="flex h-16 items-center gap-3 px-4 sm:px-6">
-            <button onClick={() => setSidebarOpen(true)} className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 lg:hidden" aria-label="Menú">
+            <button onClick={() => setSidebarOpen(true)} className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 lg:hidden" aria-label={t("menu")}>
               <MenuIcon className="h-5 w-5" />
             </button>
             <div className="min-w-0 flex-1">
@@ -449,13 +447,9 @@ export function DashboardApp({
                 <span className="truncate">{title}</span>
               </h1>
               <p className="text-xs text-zinc-500">
-                {isOverview
-                  ? "Tu actividad y el estado de tu biblioteca"
-                  : filter.kind === "monetization"
-                    ? "Tus ganancias, tarifas y pagos"
-                    : filter.kind === "admin"
-                      ? "Monetag, tarifas y pagos a usuarios"
-                      : `${visible.length} ${visible.length === 1 ? "video" : "videos"}`}
+                {isPanel
+                  ? t(`subtitles.${filter.kind as "overview" | "monetization" | "admin"}`)
+                  : t("videoCount", { count: visible.length })}
               </p>
             </div>
 
@@ -466,7 +460,7 @@ export function DashboardApp({
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar videos…"
+                placeholder={t("search")}
                 className="w-64 rounded-xl border border-zinc-200 bg-zinc-50 py-2 pl-9 pr-3 text-sm outline-none transition focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-100"
               />
             </div>
@@ -475,12 +469,12 @@ export function DashboardApp({
               value={sort}
               onChange={(e) => setSort(e.target.value as Sort)}
               className="hidden rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 outline-none sm:block"
-              aria-label="Ordenar"
+              aria-label={t("sort.label")}
             >
-              <option value="new">Más recientes</option>
-              <option value="old">Más antiguos</option>
-              <option value="name">Nombre</option>
-              <option value="size">Tamaño</option>
+              <option value="new">{t("sort.new")}</option>
+              <option value="old">{t("sort.old")}</option>
+              <option value="name">{t("sort.name")}</option>
+              <option value="size">{t("sort.size")}</option>
             </select>
 
             <div className="hidden rounded-xl border border-zinc-200 bg-white p-0.5 sm:flex">
@@ -489,7 +483,7 @@ export function DashboardApp({
                   key={v}
                   onClick={() => changeView(v)}
                   className={`rounded-lg p-1.5 transition ${view === v ? "bg-zinc-900 text-white" : "text-zinc-400 hover:text-zinc-700"}`}
-                  aria-label={v === "grid" ? "Vista cuadrícula" : "Vista lista"}
+                  aria-label={v === "grid" ? t("viewGrid") : t("viewList")}
                   aria-pressed={view === v}
                 >
                   {v === "grid" ? <GridIcon /> : <ListIcon />}
@@ -503,7 +497,7 @@ export function DashboardApp({
               onClick={() => fileInput.current?.click()}
               className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm shadow-brand-600/25 transition hover:bg-brand-700"
             >
-              <UploadIcon /> <span className="hidden sm:inline">Subir</span>
+              <UploadIcon /> <span className="hidden sm:inline">{t("upload")}</span>
             </button>
           </div>
 
@@ -513,7 +507,7 @@ export function DashboardApp({
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar videos…"
+                placeholder={t("search")}
                 className="w-full rounded-xl border border-zinc-200 bg-zinc-50 py-2 pl-9 pr-3 text-sm outline-none focus:border-brand-400 focus:bg-white"
               />
             </div>
@@ -523,17 +517,17 @@ export function DashboardApp({
         {/* Barra de selección múltiple */}
         {selected.size > 0 && !isPanel && (
           <div className="sticky top-16 z-10 mx-4 mt-4 flex items-center gap-2 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm text-white shadow-lg sm:mx-6">
-            <span className="font-medium">{selected.size} seleccionados</span>
+            <span className="font-medium">{t("selected", { count: selected.size })}</span>
             <div className="flex-1" />
             <Menu
-              label="Mover selección"
+              label={t("moveSelection")}
               items={[
-                { label: "Sin carpeta", icon: <InboxIcon />, onSelect: () => move([...selected], null) },
+                { label: t("titles.none"), icon: <InboxIcon />, onSelect: () => move([...selected], null) },
                 ...folders.map((f) => ({ label: f.name, icon: <FolderIcon />, onSelect: () => move([...selected], f.id) })),
               ]}
               trigger={({ toggle }) => (
                 <button onClick={toggle} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 hover:bg-white/10">
-                  <FolderIcon /> Mover
+                  <FolderIcon /> {t("move")}
                 </button>
               )}
             />
@@ -541,18 +535,18 @@ export function DashboardApp({
               onClick={() =>
                 setDialog({
                   kind: "confirm",
-                  title: `Eliminar ${selected.size} videos`,
-                  message: "Se eliminarán de forma permanente y sus códigos de inserción dejarán de funcionar.",
-                  confirmLabel: "Eliminar",
+                  title: t("dialogs.deleteMany", { count: selected.size }),
+                  message: t("dialogs.deleteManyMsg"),
+                  confirmLabel: tc("delete"),
                   danger: true,
                   onConfirm: () => deleteMany([...selected]),
                 })
               }
               className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-red-300 hover:bg-white/10"
             >
-              <TrashIcon /> Eliminar
+              <TrashIcon /> {tc("delete")}
             </button>
-            <button onClick={() => setSelected(new Set())} className="rounded-lg p-1.5 hover:bg-white/10" aria-label="Quitar selección">
+            <button onClick={() => setSelected(new Set())} className="rounded-lg p-1.5 hover:bg-white/10" aria-label={t("clearSelection")}>
               <XIcon />
             </button>
           </div>
@@ -590,13 +584,14 @@ export function DashboardApp({
             />
           )}
         </main>
+        {footer}
 
         {fileDrag && (
           <div className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center bg-brand-600/10 backdrop-blur-[1px] lg:left-64">
             <div className="rounded-2xl border-2 border-dashed border-brand-500 bg-white/95 px-10 py-8 text-center shadow-2xl">
               <UploadIcon className="mx-auto h-8 w-8 text-brand-600" />
-              <p className="mt-3 text-sm font-semibold">Suelta para subir</p>
-              <p className="mt-1 text-xs text-zinc-500">a «{currentFolder?.name ?? "Sin carpeta"}»</p>
+              <p className="mt-3 text-sm font-semibold">{t("dropHere")}</p>
+              <p className="mt-1 text-xs text-zinc-500">{t("dropTo", { folder: currentFolder?.name ?? t("titles.none") })}</p>
             </div>
           </div>
         )}
@@ -619,8 +614,9 @@ export function DashboardApp({
 }
 
 function EmptyState({ kind, onUpload, maxLabel }: { kind: "first" | "folder" | "search"; onUpload: () => void; maxLabel: string }) {
+  const t = useTranslations("dashboard.empty");
   if (kind === "search") {
-    return <p className="py-24 text-center text-sm text-zinc-500">No hay videos que coincidan con la búsqueda.</p>;
+    return <p className="py-24 text-center text-sm text-zinc-500">{t("search")}</p>;
   }
   return (
     <button
@@ -630,13 +626,11 @@ function EmptyState({ kind, onUpload, maxLabel }: { kind: "first" | "folder" | "
       <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-brand-600">
         <UploadIcon className="h-6 w-6" />
       </span>
-      <p className="mt-5 text-base font-semibold">{kind === "first" ? "Sube tu primer video" : "Esta carpeta está vacía"}</p>
+      <p className="mt-5 text-base font-semibold">{kind === "first" ? t("firstTitle") : t("folderTitle")}</p>
       <p className="mt-1.5 max-w-sm text-sm text-zinc-500">
-        {kind === "first"
-          ? "Arrastra archivos aquí o haz clic para elegirlos. Obtendrás al instante un código de inserción."
-          : "Arrastra videos desde otra vista hasta esta carpeta en la barra lateral, o sube nuevos aquí."}
+        {kind === "first" ? t("firstText") : t("folderText")}
       </p>
-      <p className="mt-4 text-xs text-zinc-400">MP4, WebM, MOV… · hasta {maxLabel} por archivo</p>
+      <p className="mt-4 text-xs text-zinc-400">{t("formats", { max: maxLabel })}</p>
     </button>
   );
 }

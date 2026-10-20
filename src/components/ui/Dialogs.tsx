@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useEffect, useState, type FormEvent } from "react";
 import { Modal } from "./Modal";
 
@@ -25,6 +26,7 @@ export type DialogState =
 
 /** Diálogos de confirmación / entrada de texto con el estilo de la app. */
 export function Dialogs({ state, onClose }: { state: DialogState; onClose: () => void }) {
+  const t = useTranslations("common");
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -74,7 +76,7 @@ export function Dialogs({ state, onClose }: { state: DialogState; onClose: () =>
         )}
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className={`${btn} text-zinc-600 hover:bg-zinc-100`}>
-            Cancelar
+            {t("cancel")}
           </button>
           <button
             autoFocus={state.kind === "confirm"}
@@ -83,7 +85,7 @@ export function Dialogs({ state, onClose }: { state: DialogState; onClose: () =>
               state.kind === "confirm" && state.danger ? "bg-red-600 hover:bg-red-700" : "bg-brand-600 hover:bg-brand-700"
             }`}
           >
-            {busy ? "Un momento…" : state.confirmLabel}
+            {busy ? t("oneMoment") : state.confirmLabel}
           </button>
         </div>
       </form>

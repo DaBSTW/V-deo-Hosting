@@ -6,7 +6,7 @@ import { readJson, route } from "@/server/http";
 import { moveVideos } from "@/server/videos/service";
 
 const schema = z.object({
-  videoIds: z.array(z.string().refine(isPublicVideoId, "videoId inválido")).min(1).max(500),
+  videoIds: z.array(z.string().refine(isPublicVideoId, "invalidVideoId")).min(1).max(500),
   folderId: z.string().max(40).nullable(),
 });
 

@@ -11,7 +11,7 @@ function key(): Buffer {
   const k = getCoreEnv().KYC_ENCRYPTION_KEY;
   if (!k) {
     console.error("[kyc] Falta KYC_ENCRYPTION_KEY: la verificación de identidad está deshabilitada");
-    throw new HttpError(503, "La verificación de identidad no está disponible en este momento");
+    throw new HttpError(503, "kycUnavailable");
   }
   return Buffer.from(k, "base64");
 }

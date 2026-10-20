@@ -16,6 +16,17 @@ export interface UploadCallbacks {
   signal: AbortSignal;
 }
 
+/** Error de subida con código traducible (`upload.errors.<code>`). */
+export class UploadError extends Error {
+  constructor(
+    readonly code: "failedStatus" | "network" | "failed" | "requestFailed",
+    readonly values?: Record<string, string | number>,
+  ) {
+    super(code);
+    this.name = "UploadError";
+  }
+}
+
 export class UploadAbortedError extends Error {
   constructor() {
     super("Subida cancelada");
@@ -39,7 +50,8 @@ async function api<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(data.error ?? "No se pudo completar la operación", res.status);
+  // El servidor ya devuelve el mensaje traducido al idioma del usuario.
+  if (!res.ok) throw data.error ? new ApiError(data.error, res.status) : new UploadError("requestFailed");
   return data as T;
 }
 
@@ -56,8 +68,8 @@ function putFile(
     xhr.onload = () =>
       xhr.status >= 200 && xhr.status < 300
         ? resolve()
-        : reject(new Error(`La subida falló (código ${xhr.status})`));
-    xhr.onerror = () => reject(new Error("Error de red durante la subida"));
+        : reject(new UploadError("failedStatus", { status: xhr.status }));
+    xhr.onerror = () => reject(new UploadError("network"));
     xhr.onabort = () => reject(new UploadAbortedError());
     cb.signal.addEventListener("abort", () => xhr.abort(), { once: true });
     xhr.send(file);
@@ -79,7 +91,7 @@ async function resumableUpload(
       storeFingerprintForResuming: false,
       onProgress: (sent, total) => cb.onProgress(total ? sent / total : 0),
       onSuccess: () => resolve(),
-      onError: (err) => reject(new Error(err.message || "La subida falló")),
+      onError: () => reject(new UploadError("failed")),
     });
     cb.signal.addEventListener(
       "abort",

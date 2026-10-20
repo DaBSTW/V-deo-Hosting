@@ -15,7 +15,7 @@ export const POST = route(async (req) => {
   const valid = user
     ? await verifyPassword(password, user.passwordHash)
     : await burnPasswordCheck(password).then(() => false);
-  if (!user || !valid) throw new HttpError(401, "Email o contraseña incorrectos");
+  if (!user || !valid) throw new HttpError(401, "invalidCredentials");
 
   const res = NextResponse.json({ ok: true });
   res.cookies.set(sessionCookie(await signSession({ sub: user.id, email: user.email })));

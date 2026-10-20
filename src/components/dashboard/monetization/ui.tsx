@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
@@ -88,16 +89,21 @@ export function Segmented<T extends string | number>({
   );
 }
 
-const STATUS: Record<string, { label: string; cls: string }> = {
-  PENDING: { label: "Solicitado", cls: "bg-amber-50 text-amber-700" },
-  APPROVED: { label: "Aprobado", cls: "bg-brand-50 text-brand-700" },
-  PAID: { label: "Pagado", cls: "bg-emerald-50 text-emerald-700" },
-  REJECTED: { label: "Rechazado", cls: "bg-red-50 text-red-700" },
+const STATUS_CLS: Record<string, string> = {
+  PENDING: "bg-amber-50 text-amber-700",
+  APPROVED: "bg-brand-50 text-brand-700",
+  PAID: "bg-emerald-50 text-emerald-700",
+  REJECTED: "bg-red-50 text-red-700",
 };
 
 export function PayoutBadge({ status }: { status: string }) {
-  const s = STATUS[status] ?? { label: status, cls: "bg-zinc-100 text-zinc-600" };
-  return <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${s.cls}`}>{s.label}</span>;
+  const t = useTranslations("payoutStatus");
+  const known = status in STATUS_CLS;
+  return (
+    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLS[status] ?? "bg-zinc-100 text-zinc-600"}`}>
+      {known ? t(status as "PENDING") : status}
+    </span>
+  );
 }
 
 export const inputCls =

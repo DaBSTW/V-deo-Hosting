@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { formatBytes, formatCount, formatDay, formatLongDuration, formatRelative } from "@/lib/format";
+import { useLocale, useTranslations } from "next-intl";
+import { useFormat } from "@/i18n/useFormat";
 import type { DashboardStats } from "@/server/videos/stats";
 import {
   AlertIcon, ArrowDownIcon, ArrowUpIcon, CheckIcon, ClockIcon, DatabaseIcon, DownloadIcon, EyeIcon, FilmIcon, UploadIcon,
@@ -17,16 +18,18 @@ type Metric = "views" | "downloads";
 const RANGES: Range[] = [7, 30, 90];
 
 interface Delta {
-  text: string;
+  /** `new`: no había datos en el periodo anterior. */
+  kind: "new" | "flat" | "pct";
+  pct?: number;
   dir: "up" | "down" | "flat";
 }
 
 /** Variación del periodo actual frente al anterior de la misma duración. */
 function delta(current: number, previous: number): Delta {
-  if (previous === 0) return current > 0 ? { text: "Nuevo", dir: "up" } : { text: "Sin cambios", dir: "flat" };
+  if (previous === 0) return current > 0 ? { kind: "new", dir: "up" } : { kind: "flat", dir: "flat" };
   const pct = ((current - previous) / previous) * 100;
-  if (Math.abs(pct) < 0.5) return { text: "Sin cambios", dir: "flat" };
-  return { text: `${pct > 0 ? "+" : ""}${pct.toFixed(Math.abs(pct) < 10 ? 1 : 0).replace(".", ",")} %`, dir: pct > 0 ? "up" : "down" };
+  if (Math.abs(pct) < 0.5) return { kind: "flat", dir: "flat" };
+  return { kind: "pct", pct, dir: pct > 0 ? "up" : "down" };
 }
 
 export function Overview({
@@ -42,6 +45,8 @@ export function Overview({
   onUpload: () => void;
   refreshing: boolean;
 }) {
+  const tx = useTranslations("overview");
+  const { formatBytes, formatCount, formatDay, formatLongDuration, formatRelative } = useFormat();
   const [range, setRange] = useState<Range>(30);
   const [metric, setMetric] = useState<Metric>("views");
   const [showTable, setShowTable] = useState(false);
@@ -101,13 +106,13 @@ export function Overview({
       {/* Filtro de periodo: una fila, arriba, afecta a todo lo de abajo */}
       <div className="flex flex-wrap items-center gap-3">
         <Segmented
-          label="Periodo"
+          label={tx("period")}
           value={range}
           onChange={setRange}
-          options={RANGES.map((r) => ({ value: r, label: `${r} días` }))}
+          options={RANGES.map((r) => ({ value: r, label: tx("days", { count: r }) }))}
         />
         <p className="text-xs text-zinc-500">
-          Comparado con los {range} días anteriores · actualizado {formatRelative(stats.generatedAt)}
+          {tx("compared", { count: range, updated: formatRelative(stats.generatedAt) })}
         </p>
       </div>
 
@@ -115,22 +120,22 @@ export function Overview({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
           icon={<EyeIcon />}
-          label="Reproducciones"
+          label={tx("views")}
           value={formatCount(m.views)}
           delta={m.viewsDelta}
-          foot={`Hoy: ${formatCount(m.today.views)}`}
+          foot={tx("today", { value: formatCount(m.today.views) })}
           trend={m.cur.map((d) => d.views)}
         />
         <StatTile
           icon={<DownloadIcon />}
-          label="Descargas"
+          label={tx("downloads")}
           value={formatCount(m.downloads)}
           delta={m.downloadsDelta}
-          foot={`Hoy: ${formatCount(m.today.downloads)}`}
+          foot={tx("today", { value: formatCount(m.today.downloads) })}
           trend={m.cur.map((d) => d.downloads)}
         />
         <Card>
-          <TileHeader icon={<DatabaseIcon />} label="Almacenamiento" />
+          <TileHeader icon={<DatabaseIcon />} label={tx("storage")} />
           <p className="mt-2 text-2xl font-semibold tracking-tight">{formatBytes(m.storage)}</p>
           {quota ? (
             <>
@@ -140,7 +145,7 @@ export function Overview({
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={Math.round(quotaPct)}
-                aria-label="Uso del almacenamiento"
+                aria-label={tx("storageUsage")}
               >
                 <div
                   className={`h-full rounded-full ${quotaPct >= 95 ? "bg-red-600" : quotaPct >= 80 ? "bg-amber-500" : "bg-brand-500"}`}
@@ -148,56 +153,56 @@ export function Overview({
                 />
               </div>
               <p className="mt-2 text-xs text-zinc-500">
-                {quotaPct.toFixed(0)} % de {formatBytes(quota)}
-                {quotaPct >= 80 && <span className="font-medium text-amber-700"> · queda poco espacio</span>}
+                {tx("quotaOf", { pct: Math.round(quotaPct), total: formatBytes(quota) })}
+                {quotaPct >= 80 && <span className="font-medium text-amber-700"> · {tx("lowSpace")}</span>}
               </p>
             </>
           ) : (
-            <p className="mt-3 text-xs text-zinc-500">Sin límite de almacenamiento</p>
+            <p className="mt-3 text-xs text-zinc-500">{tx("unlimited")}</p>
           )}
         </Card>
         <Card>
-          <TileHeader icon={<FilmIcon />} label="Videos" />
+          <TileHeader icon={<FilmIcon />} label={tx("videos")} />
           <p className="mt-2 text-2xl font-semibold tracking-tight">{formatCount(videos.length)}</p>
           <ul className="mt-2.5 space-y-1 text-xs">
-            <StatusLine tone="good" icon={<CheckIcon className="h-3.5 w-3.5" />} label="Listos" count={m.ready} />
+            <StatusLine tone="good" icon={<CheckIcon className="h-3.5 w-3.5" />} label={tx("ready")} count={m.ready} />
             {m.processing > 0 && (
               <StatusLine
                 tone="warning"
                 icon={<span className="h-3 w-3 animate-spin rounded-full border-2 border-amber-300 border-t-amber-600" />}
-                label="Procesando"
+                label={tx("processing")}
                 count={m.processing}
               />
             )}
-            {m.errors > 0 && <StatusLine tone="critical" icon={<AlertIcon className="h-3.5 w-3.5" />} label="Con error" count={m.errors} />}
+            {m.errors > 0 && <StatusLine tone="critical" icon={<AlertIcon className="h-3.5 w-3.5" />} label={tx("withError")} count={m.errors} />}
           </ul>
         </Card>
       </div>
 
       {/* Indicadores secundarios */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <MiniStat icon={<ClockIcon />} label="Contenido publicado" value={formatLongDuration(m.content)} />
-        <MiniStat icon={<EyeIcon />} label="Reproducciones totales" value={`${formatCount(m.lifetimeViews)}`} hint={`${formatCount(m.lifetimeDownloads)} descargas en total`} />
-        <MiniStat icon={<UploadIcon />} label={`Subidos en ${range} días`} value={formatCount(m.uploadedInRange)} />
+        <MiniStat icon={<ClockIcon />} label={tx("content")} value={formatLongDuration(m.content)} />
+        <MiniStat icon={<EyeIcon />} label={tx("lifetimeViews")} value={formatCount(m.lifetimeViews)} hint={tx("lifetimeDownloads", { value: formatCount(m.lifetimeDownloads) })} />
+        <MiniStat icon={<UploadIcon />} label={tx("uploadedIn", { count: range })} value={formatCount(m.uploadedInRange)} />
       </div>
 
       {/* Gráfica diaria */}
       <Card>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold text-zinc-900">{metric === "views" ? "Reproducciones por día" : "Descargas por día"}</h2>
+            <h2 className="text-sm font-semibold text-zinc-900">{metric === "views" ? tx("viewsPerDay") : tx("downloadsPerDay")}</h2>
             <p className="mt-0.5 text-xs text-zinc-500">
-              {formatCount(metricTotal)} en los últimos {range} días
+              {tx("totalInRange", { value: formatCount(metricTotal), count: range })}
             </p>
           </div>
           <div className="flex items-center gap-2">
             <Segmented
-              label="Métrica"
+              label={tx("metric")}
               value={metric}
               onChange={setMetric}
               options={[
-                { value: "views", label: "Reproducciones" },
-                { value: "downloads", label: "Descargas" },
+                { value: "views", label: tx("views") },
+                { value: "downloads", label: tx("downloads") },
               ]}
             />
             <button
@@ -205,7 +210,7 @@ export function Overview({
               className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
               aria-pressed={showTable}
             >
-              {showTable ? "Ver gráfica" : "Ver tabla"}
+              {showTable ? tx("showChart") : tx("showTable")}
             </button>
           </div>
         </div>
@@ -216,9 +221,9 @@ export function Overview({
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-zinc-50 text-left text-xs text-zinc-500">
                   <tr>
-                    <th className="px-3 py-2 font-medium">Día</th>
-                    <th className="px-3 py-2 text-right font-medium">Reproducciones</th>
-                    <th className="px-3 py-2 text-right font-medium">Descargas</th>
+                    <th className="px-3 py-2 font-medium">{tx("day")}</th>
+                    <th className="px-3 py-2 text-right font-medium">{tx("views")}</th>
+                    <th className="px-3 py-2 text-right font-medium">{tx("downloads")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 tabular-nums">
@@ -236,12 +241,12 @@ export function Overview({
             <>
               <ColumnChart
                 data={chartData}
-                unit={metric === "views" ? "reproducciones" : "descargas"}
-                label={`${metric === "views" ? "Reproducciones" : "Descargas"} por día, últimos ${range} días`}
+                unit={metric === "views" ? tx("unitViews") : tx("unitDownloads")}
+                label={tx("chartLabel", { metric, count: range })}
               />
               {metricTotal === 0 && (
                 <p className="mt-2 text-center text-xs text-zinc-500">
-                  Aún no hay {metric === "views" ? "reproducciones" : "descargas"} en este periodo. Comparte el enlace o inserta el reproductor en tu web.
+                  {tx("noData", { metric })}
                 </p>
               )}
             </>
@@ -252,10 +257,10 @@ export function Overview({
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
         {/* Más vistos */}
         <Card className="xl:col-span-3">
-          <h2 className="text-sm font-semibold text-zinc-900">Más vistos</h2>
-          <p className="mt-0.5 text-xs text-zinc-500">Últimos {range} días</p>
+          <h2 className="text-sm font-semibold text-zinc-900">{tx("topViewed")}</h2>
+          <p className="mt-0.5 text-xs text-zinc-500">{tx("lastDays", { count: range })}</p>
           {m.top.length === 0 ? (
-            <p className="py-10 text-center text-sm text-zinc-500">Todavía no hay reproducciones en este periodo.</p>
+            <p className="py-10 text-center text-sm text-zinc-500">{tx("noViewsYet")}</p>
           ) : (
             <ol className="mt-4 space-y-1">
               {m.top.map((t, i) => (
@@ -272,7 +277,7 @@ export function Overview({
                     </span>
                     <span className="w-16 shrink-0 text-right sm:w-24">
                       <span className="block text-sm font-semibold tabular-nums">{formatCount(t.views)}</span>
-                      <span className="block text-[11px] text-zinc-500">{formatCount(t.downloads)} desc.</span>
+                      <span className="block text-[11px] text-zinc-500">{tx("downloadsShort", { value: formatCount(t.downloads) })}</span>
                     </span>
                   </button>
                 </li>
@@ -285,7 +290,7 @@ export function Overview({
           {/* Requiere atención */}
           {attention.length > 0 && (
             <Card>
-              <h2 className="text-sm font-semibold text-zinc-900">Requiere atención</h2>
+              <h2 className="text-sm font-semibold text-zinc-900">{tx("attention")}</h2>
               <ul className="mt-3 divide-y divide-zinc-100">
                 {attention.map((v) => (
                   <li key={v.id} className="flex items-center gap-3 py-2.5">
@@ -299,12 +304,12 @@ export function Overview({
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium">{v.title}</span>
                       <span className="block text-xs text-zinc-500">
-                        {v.status === "error" ? "No se pudo procesar · bórralo y súbelo de nuevo" : v.status === "processing" ? "Procesando…" : "Subida sin completar"}
+                        {v.status === "error" ? tx("attentionError") : v.status === "processing" ? tx("attentionProcessing") : tx("attentionIncomplete")}
                       </span>
                     </span>
                     {v.status === "error" && (
                       <button onClick={() => actions.remove(v)} className="rounded-lg px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50">
-                        Borrar
+                        {tx("delete")}
                       </button>
                     )}
                   </li>
@@ -316,13 +321,13 @@ export function Overview({
           {/* Recientes */}
           <Card>
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-zinc-900">Subidos recientemente</h2>
+              <h2 className="text-sm font-semibold text-zinc-900">{tx("recent")}</h2>
               <button onClick={onUpload} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50">
-                <UploadIcon className="h-3.5 w-3.5" /> Subir
+                <UploadIcon className="h-3.5 w-3.5" /> {tx("upload")}
               </button>
             </div>
             {recent.length === 0 ? (
-              <p className="py-8 text-center text-sm text-zinc-500">Aún no has subido videos.</p>
+              <p className="py-8 text-center text-sm text-zinc-500">{tx("noUploads")}</p>
             ) : (
               <ul className="mt-3 space-y-1">
                 {recent.map((v) => (
@@ -332,7 +337,7 @@ export function Overview({
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium">{v.title}</span>
                         <span className="block text-xs text-zinc-500">
-                          {formatRelative(v.createdAt)} · {formatCount(v.views)} reproducciones
+                          {formatRelative(v.createdAt)} · {tx("viewsCount", { count: v.views, value: formatCount(v.views) })}
                         </span>
                       </span>
                     </button>
@@ -371,6 +376,14 @@ function StatTile({
   foot: string;
   trend: number[];
 }) {
+  const tx = useTranslations("overview");
+  const locale = useLocale();
+  const deltaText =
+    delta.kind === "new"
+      ? tx("deltaNew")
+      : delta.kind === "flat"
+        ? tx("deltaFlat")
+        : new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: Math.abs(delta.pct!) < 10 ? 1 : 0, signDisplay: "always" }).format(delta.pct! / 100);
   // Texto del delta con color de texto (no de serie) + flecha: nunca solo color.
   const tone = delta.dir === "up" ? "text-[#006300]" : delta.dir === "down" ? "text-[#b42318]" : "text-zinc-500";
   return (
@@ -382,7 +395,7 @@ function StatTile({
           <p className={`mt-1 inline-flex items-center gap-1 text-xs font-medium ${tone}`}>
             {delta.dir === "up" && <ArrowUpIcon className="h-3.5 w-3.5" />}
             {delta.dir === "down" && <ArrowDownIcon className="h-3.5 w-3.5" />}
-            {delta.text}
+            {deltaText}
           </p>
         </div>
         <Sparkline values={trend} />

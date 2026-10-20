@@ -21,10 +21,10 @@ export const POST = route(async (req) => {
   const user = await requireApiUser();
   rateLimit(`kyc:${user.id}`, 5, 24 * 3600 * 1000);
   if (Number(req.headers.get("content-length") ?? 0) > 20 * 1024 * 1024) {
-    throw new HttpError(413, "Las fotos son demasiado grandes");
+    throw new HttpError(413, "photosTooLarge");
   }
   const form = await req.formData().catch(() => {
-    throw new HttpError(400, "Formulario inválido");
+    throw new HttpError(400, "invalidForm");
   });
   await submitVerification(user.id, form);
   return NextResponse.json(await getKycStatus(user.id), { status: 201 });

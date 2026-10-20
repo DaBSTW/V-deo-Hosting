@@ -295,11 +295,11 @@ export class CloudflareR2Adapter implements VideoProviderAdapter {
     return [
       {
         id: "original",
-        label: sourceHeight ? `Original (${sourceHeight}p)` : "Original",
+        kind: "original",
         height: sourceHeight,
         sizeBytes: originalSizeBytes,
       },
-      ...renditionsOf(ref).map((r) => ({ id: String(r.h), label: `${r.h}p`, height: r.h, sizeBytes: r.bytes })),
+      ...renditionsOf(ref).map((r) => ({ id: String(r.h), kind: "rendition" as const, height: r.h, sizeBytes: r.bytes })),
     ];
   }
 

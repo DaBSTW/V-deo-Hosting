@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { formatBytes } from "@/lib/format";
+import { useTranslations } from "next-intl";
+import { useFormat } from "@/i18n/useFormat";
 import { ChevronDownIcon, CheckIcon, FilmIcon, XIcon } from "../ui/icons";
 import type { UploadItem } from "./useUploads";
 
@@ -15,11 +16,13 @@ export function UploadPanel({
   onCancel: (item: UploadItem) => void;
   onDismiss: (key: string) => void;
 }) {
+  const t = useTranslations("upload");
+  const { formatBytes } = useFormat();
   const [collapsed, setCollapsed] = useState(false);
   if (items.length === 0) return null;
 
   const active = items.filter((i) => i.status === "uploading" || i.status === "queued").length;
-  const title = active > 0 ? `Subiendo ${active} ${active === 1 ? "video" : "videos"}` : "Subidas finalizadas";
+  const title = active > 0 ? t("panelUploading", { count: active }) : t("panelDone");
 
   return (
     <div className="fixed bottom-4 right-4 z-40 w-[calc(100%-2rem)] max-w-sm overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl shadow-zinc-900/15">
@@ -45,7 +48,7 @@ export function UploadPanel({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{item.title}</p>
                 <p className={`truncate text-xs ${item.status === "error" ? "text-red-600" : "text-zinc-500"}`}>
-                  {statusText(item)}
+                  {statusText(item, t, formatBytes)}
                 </p>
                 {(item.status === "uploading" || item.status === "queued") && (
                   <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-zinc-100">
@@ -66,7 +69,7 @@ export function UploadPanel({
                     item.status === "uploading" || item.status === "queued" ? onCancel(item) : onDismiss(item.key)
                   }
                   className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
-                  aria-label={item.status === "uploading" || item.status === "queued" ? "Cancelar" : "Descartar"}
+                  aria-label={item.status === "uploading" || item.status === "queued" ? t("cancel") : t("dismiss")}
                 >
                   <XIcon />
                 </button>
@@ -79,19 +82,23 @@ export function UploadPanel({
   );
 }
 
-function statusText(item: UploadItem): string {
+function statusText(
+  item: UploadItem,
+  t: ReturnType<typeof useTranslations<"upload">>,
+  formatBytes: (n: number) => string,
+): string {
   switch (item.status) {
     case "queued":
-      return `En cola · ${formatBytes(item.file.size)}`;
+      return t("queued", { size: formatBytes(item.file.size) });
     case "uploading":
       return item.progress >= 1
-        ? "Finalizando…"
-        : `${Math.round(item.progress * 100)} % · ${formatBytes(item.file.size)}`;
+        ? t("finalizing")
+        : t("progress", { pct: Math.round(item.progress * 100), size: formatBytes(item.file.size) });
     case "done":
-      return "Completado";
+      return t("done");
     case "canceled":
-      return "Cancelado";
+      return t("canceled");
     case "error":
-      return item.error ?? "Error";
+      return item.error ?? t("errors.failed");
   }
 }

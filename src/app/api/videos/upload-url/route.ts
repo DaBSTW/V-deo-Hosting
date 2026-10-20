@@ -6,12 +6,12 @@ import { clientIp, rateLimit } from "@/server/rate-limit";
 import { createUpload } from "@/server/videos/service";
 
 const schema = z.object({
-  title: z.string().trim().min(1, "El título es obligatorio").max(200),
+  title: z.string().trim().min(1, "titleRequired").max(200),
   fileName: z.string().trim().min(1).max(255),
   sizeBytes: z.number().int().positive(),
   mimeType: z
     .string()
-    .regex(/^video\/[a-z0-9.+-]+$/i, "Solo se admiten archivos de video")
+    .regex(/^video\/[a-z0-9.+-]+$/i, "videoFilesOnly")
     .transform((v) => v.toLowerCase()),
   folderId: z.string().max(40).nullish(),
 });

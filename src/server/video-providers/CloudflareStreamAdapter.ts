@@ -151,7 +151,7 @@ export class CloudflareStreamAdapter implements VideoProviderAdapter {
 
   /** Stream genera un único MP4 descargable por video. */
   listDownloadOptions(_ref: ProviderVideoRef, originalSizeBytes: number): DownloadOption[] {
-    return [{ id: "default", label: "MP4", sizeBytes: originalSizeBytes || null }];
+    return [{ id: "default", kind: "single", sizeBytes: originalSizeBytes || null }];
   }
 
   async getDownloadUrl(ref: ProviderVideoRef, baseName: string): Promise<DownloadResult> {

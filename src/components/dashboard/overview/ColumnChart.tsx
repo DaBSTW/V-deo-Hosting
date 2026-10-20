@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { formatCount, formatDay } from "@/lib/format";
+import { useTranslations } from "next-intl";
+import { useFormat } from "@/i18n/useFormat";
 
 /**
  * Gráfica de columnas de una sola serie (sin librerías).
@@ -39,7 +40,7 @@ export function ColumnChart({
   data,
   unit = "",
   label,
-  format = formatCount,
+  format,
   integer = true,
 }: {
   data: ColumnPoint[];
@@ -50,6 +51,9 @@ export function ColumnChart({
   /** Valores enteros (conteos) o decimales (importes). */
   integer?: boolean;
 }) {
+  const t = useTranslations("chart");
+  const { formatCount, formatDay } = useFormat();
+  const fmt = format ?? formatCount;
   const wrap = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(640);
   const [active, setActive] = useState<number | null>(null);
@@ -91,7 +95,7 @@ export function ColumnChart({
         width={width}
         height={HEIGHT}
         role="img"
-        aria-label={`${label}. Usa las flechas para recorrer los días.`}
+        aria-label={t("ariaHint", { label })}
         tabIndex={0}
         onKeyDown={onKey}
         onBlur={() => setActive(null)}
@@ -103,7 +107,7 @@ export function ColumnChart({
           <g key={t}>
             <line x1={M.left} x2={width - M.right} y1={y(t)} y2={y(t)} stroke={t === 0 ? "#d4d4d8" : "#ececee"} strokeWidth={1} shapeRendering="crispEdges" />
             <text x={M.left - 8} y={y(t)} dy="0.32em" textAnchor="end" className="fill-zinc-400 text-[11px] tabular-nums">
-              {format(t)}
+              {fmt(t)}
             </text>
           </g>
         ))}
@@ -149,7 +153,7 @@ export function ColumnChart({
           style={{ left: Math.min(Math.max(tipX, 60), width - 60), top: Math.max(0, y(a.value) - 8) }}
         >
           <p className="text-sm font-semibold text-white">
-            {format(a.value)} {unit && <span className="font-normal text-zinc-400">{unit}</span>}
+            {fmt(a.value)} {unit && <span className="font-normal text-zinc-400">{unit}</span>}
           </p>
           <p className="text-[11px] text-zinc-400">{formatDay(a.date, true)}</p>
         </div>

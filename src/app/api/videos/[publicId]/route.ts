@@ -9,7 +9,7 @@ type Ctx = { params: Promise<{ publicId: string }> };
 
 async function publicIdFrom(ctx: Ctx) {
   const { publicId } = await ctx.params;
-  if (!isPublicVideoId(publicId)) throw new HttpError(404, "Video no encontrado");
+  if (!isPublicVideoId(publicId)) throw new HttpError(404, "videoNotFound");
   return publicId;
 }
 
@@ -21,11 +21,11 @@ export const GET = route<Ctx>(async (_req, ctx) => {
 
 const patchSchema = z
   .object({
-    title: z.string().trim().min(1, "El título es obligatorio").max(200).optional(),
+    title: z.string().trim().min(1, "titleRequired").max(200).optional(),
     folderId: z.string().max(40).nullable().optional(),
     allowDownload: z.boolean().optional(),
   })
-  .refine((v) => Object.values(v).some((x) => x !== undefined), "Nada que actualizar");
+  .refine((v) => Object.values(v).some((x) => x !== undefined), "nothingToUpdate");
 
 /**
  * PATCH /api/videos/:publicId — renombrar, mover de carpeta (`folderId: null` =

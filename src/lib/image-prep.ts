@@ -6,10 +6,11 @@
  */
 const MAX_SIDE = 2000;
 
+/** Los errores lanzados son códigos traducibles (`kyc.photoErrors.<code>`). */
 export async function prepareIdPhoto(file: File): Promise<File> {
-  if (!file.type.startsWith("image/")) throw new Error("El archivo debe ser una imagen");
+  if (!file.type.startsWith("image/")) throw new Error("notImage");
   const bitmap = await createImageBitmap(file).catch(() => {
-    throw new Error("No se pudo leer la imagen. Prueba con una foto JPG o PNG.");
+    throw new Error("unreadable");
   });
   const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
   const canvas = document.createElement("canvas");
@@ -18,6 +19,6 @@ export async function prepareIdPhoto(file: File): Promise<File> {
   canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   bitmap.close();
   const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/jpeg", 0.85));
-  if (!blob) throw new Error("No se pudo procesar la imagen");
+  if (!blob) throw new Error("processFailed");
   return new File([blob], "foto.jpg", { type: "image/jpeg" });
 }

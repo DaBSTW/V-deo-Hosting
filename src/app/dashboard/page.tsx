@@ -1,4 +1,6 @@
+import { getTranslations } from "next-intl/server";
 import { DashboardApp } from "@/components/dashboard/DashboardApp";
+import { SiteFooter } from "@/components/legal/SiteFooter";
 import type { FolderFilter } from "@/components/dashboard/types";
 import { isAdmin } from "@/server/auth/admin";
 import { requirePageUser } from "@/server/auth/session";
@@ -6,7 +8,9 @@ import { listFolders, listVideos, maxUploadBytes } from "@/server/videos/service
 import { getDashboardStats } from "@/server/videos/stats";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Mis videos" };
+export async function generateMetadata() {
+  return { title: (await getTranslations("dashboard"))("metaTitle") };
+}
 
 type Props = { searchParams: Promise<{ folder?: string }> };
 
@@ -41,6 +45,7 @@ export default async function DashboardPage({ searchParams }: Props) {
       initialFolders={folders}
       initialFilter={initialFilter}
       initialStats={stats}
+      footer={<SiteFooter compact />}
       maxBytes={maxUploadBytes()}
     />
   );

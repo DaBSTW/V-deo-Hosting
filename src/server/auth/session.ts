@@ -24,7 +24,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 /** Para Route Handlers: lanza 401 si no hay sesión. */
 export async function requireApiUser(): Promise<SessionUser> {
   const user = await getSessionUser();
-  if (!user) throw new HttpError(401, "No autenticado");
+  if (!user) throw new HttpError(401, "unauthenticated");
   return user;
 }
 

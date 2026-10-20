@@ -1,6 +1,7 @@
 "use client";
 
-import { formatBytes, formatDate, formatDuration } from "@/lib/format";
+import { useTranslations } from "next-intl";
+import { useFormat } from "@/i18n/useFormat";
 import { Modal } from "../ui/Modal";
 import { CodeIcon, ExternalIcon, LinkIcon, PencilIcon, TrashIcon } from "../ui/icons";
 import { StatusBadge } from "./StatusBadge";
@@ -19,6 +20,8 @@ export function VideoModal({
   actions: VideoActions;
   onClose: () => void;
 }) {
+  const t = useTranslations("video.modal");
+  const { formatBytes, formatDate, formatDuration } = useFormat();
   if (!video) return null;
   const ready = video.status === "ready";
 
@@ -42,20 +45,20 @@ export function VideoModal({
 
         <div className="space-y-5 p-5">
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-            <Info label="Estado"><StatusBadge status={video.status} /></Info>
-            <Info label="Duración">{formatDuration(video.durationSec)}</Info>
-            <Info label="Tamaño">{formatBytes(video.sizeBytes)}</Info>
-            <Info label="Subido">{formatDate(video.createdAt)}</Info>
+            <Info label={t("status")}><StatusBadge status={video.status} /></Info>
+            <Info label={t("duration")}>{formatDuration(video.durationSec)}</Info>
+            <Info label={t("size")}>{formatBytes(video.sizeBytes)}</Info>
+            <Info label={t("uploaded")}>{formatDate(video.createdAt)}</Info>
           </dl>
 
           <label className="block">
-            <span className="text-xs font-medium text-zinc-500">Carpeta</span>
+            <span className="text-xs font-medium text-zinc-500">{t("folder")}</span>
             <select
               value={video.folderId ?? ""}
               onChange={(e) => actions.move([video.id], e.target.value || null)}
               className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
             >
-              <option value="">Sin carpeta</option>
+              <option value="">{t("noFolder")}</option>
               {folders.map((f) => (
                 <option key={f.id} value={f.id}>{f.name}</option>
               ))}
@@ -64,8 +67,8 @@ export function VideoModal({
 
           <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-zinc-200 px-3.5 py-3">
             <span>
-              <span className="block text-sm font-medium text-zinc-800">Permitir descarga</span>
-              <span className="block text-xs text-zinc-500">Muestra el botón «Descargar» en el enlace directo.</span>
+              <span className="block text-sm font-medium text-zinc-800">{t("allowDownload")}</span>
+              <span className="block text-xs text-zinc-500">{t("allowDownloadHint")}</span>
             </span>
             <button
               type="button"
@@ -82,17 +85,17 @@ export function VideoModal({
             </button>
           </label>
 
-          <CopyField label="Código de inserción" value={video.iframe} multiline disabled={!ready} onCopy={() => actions.copyIframe(video)} icon={<CodeIcon />} />
-          <CopyField label="Enlace directo" value={video.watchUrl} disabled={!ready} onCopy={() => actions.copyLink(video)} icon={<LinkIcon />} />
+          <CopyField label={t("embedCode")} copyLabel={t("copy")} value={video.iframe} multiline disabled={!ready} onCopy={() => actions.copyIframe(video)} icon={<CodeIcon />} />
+          <CopyField label={t("directLink")} copyLabel={t("copy")} value={video.watchUrl} disabled={!ready} onCopy={() => actions.copyLink(video)} icon={<LinkIcon />} />
 
           <div className="flex flex-wrap gap-2 border-t border-zinc-100 pt-4">
-            <SmallButton onClick={() => actions.rename(video)}><PencilIcon /> Renombrar</SmallButton>
+            <SmallButton onClick={() => actions.rename(video)}><PencilIcon /> {t("rename")}</SmallButton>
             {ready && (
               <SmallButton onClick={() => window.open(video.watchUrl, "_blank", "noopener")}>
-                <ExternalIcon /> Abrir
+                <ExternalIcon /> {t("open")}
               </SmallButton>
             )}
-            <SmallButton danger onClick={() => actions.remove(video)}><TrashIcon /> Eliminar</SmallButton>
+            <SmallButton danger onClick={() => actions.remove(video)}><TrashIcon /> {t("delete")}</SmallButton>
           </div>
         </div>
       </div>
@@ -110,9 +113,10 @@ function Info({ label, children }: { label: string; children: React.ReactNode })
 }
 
 function CopyField({
-  label, value, multiline, disabled, onCopy, icon,
+  label, copyLabel, value, multiline, disabled, onCopy, icon,
 }: {
   label: string;
+  copyLabel: string;
   value: string;
   multiline?: boolean;
   disabled?: boolean;
@@ -126,7 +130,7 @@ function CopyField({
       <div className="mb-1 flex items-center justify-between">
         <span className="text-xs font-medium text-zinc-500">{label}</span>
         <button onClick={onCopy} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50">
-          {icon} Copiar
+          {icon} {copyLabel}
         </button>
       </div>
       {multiline ? (

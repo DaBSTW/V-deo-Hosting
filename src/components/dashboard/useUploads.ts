@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { formatBytes } from "@/lib/format";
-import { UploadAbortedError, uploadVideo } from "@/lib/upload-client";
+import { useTranslations } from "next-intl";
+import { useFormat } from "@/i18n/useFormat";
+import { UploadAbortedError, UploadError, uploadVideo } from "@/lib/upload-client";
 import type { PublicVideo } from "@/server/videos/dto";
 
 export type UploadStatus = "queued" | "uploading" | "done" | "error" | "canceled";
@@ -25,6 +26,8 @@ const titleFromFile = (name: string) =>
 
 /** Cola de subidas (máx. 2 en paralelo), independiente de la vista. */
 export function useUploads(maxBytes: number, onUploaded: (video: PublicVideo) => void) {
+  const t = useTranslations("upload.errors");
+  const { formatBytes } = useFormat();
   const [items, setItems] = useState<UploadItem[]>([]);
   const running = useRef(new Set<string>());
 
@@ -52,16 +55,16 @@ export function useUploads(maxBytes: number, onUploaded: (video: PublicVideo) =>
           controller: new AbortController(),
         };
         if (file.type && !file.type.startsWith("video/")) {
-          return { ...base, status: "error", error: "No es un archivo de video" };
+          return { ...base, status: "error", error: t("notVideo") };
         }
         if (file.size > maxBytes) {
-          return { ...base, status: "error", error: `Supera el máximo (${formatBytes(maxBytes)})` };
+          return { ...base, status: "error", error: t("tooLarge", { max: formatBytes(maxBytes) }) };
         }
         return { ...base, status: "queued" };
       });
       setItems((prev) => [...prev, ...next]);
     },
-    [maxBytes],
+    [maxBytes, t, formatBytes],
   );
 
   const cancel = useCallback(
@@ -98,12 +101,12 @@ export function useUploads(maxBytes: number, onUploaded: (video: PublicVideo) =>
             item.key,
             err instanceof UploadAbortedError
               ? { status: "canceled" }
-              : { status: "error", error: (err as Error).message },
+              : { status: "error", error: err instanceof UploadError ? t(err.code, err.values as never) : (err as Error).message },
           );
         }
       })();
     }
-  }, [items, onUploaded, patch, remove]);
+  }, [items, onUploaded, patch, remove, t]);
 
   // Evita cerrar la pestaña con subidas en curso.
   const busy = items.some((i) => i.status === "uploading" || i.status === "queued");

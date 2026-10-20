@@ -6,22 +6,17 @@
 export type Tier = "T1" | "T2" | "T3";
 export const TIERS: Tier[] = ["T1", "T2", "T3"];
 
-export const TIER_LABELS: Record<Tier, string> = {
-  T1: "Nivel 1",
-  T2: "Nivel 2",
-  T3: "Nivel 3",
-};
-
 const T1 = new Set(["US", "CA", "GB", "AU", "NZ", "DE", "FR", "NL", "BE", "CH", "AT", "SE", "NO", "DK", "FI", "IE", "LU", "IS"]);
 const T2 = new Set([
   "ES", "IT", "PT", "JP", "KR", "SG", "HK", "TW", "IL", "AE", "SA", "QA", "KW",
   "PL", "CZ", "GR", "SK", "SI", "EE", "LV", "LT", "MX", "CL", "UY", "AR", "BR",
 ]);
 
-export const TIER_COUNTRIES: Record<Tier, string> = {
-  T1: [...T1].join(", "),
-  T2: [...T2].join(", "),
-  T3: "Resto del mundo",
+/** Países de cada nivel (`null` = resto del mundo). */
+export const TIER_COUNTRIES: Record<Tier, string[] | null> = {
+  T1: [...T1],
+  T2: [...T2],
+  T3: null,
 };
 
 export function tierOf(country: string | null | undefined): Tier {

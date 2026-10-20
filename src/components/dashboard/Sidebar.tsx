@@ -2,7 +2,8 @@
 
 import { useState, type DragEvent, type FormEvent, type ReactNode } from "react";
 import { APP_NAME } from "@/lib/brand";
-import { formatBytes } from "@/lib/format";
+import { useTranslations } from "next-intl";
+import { useFormat } from "@/i18n/useFormat";
 import { Menu } from "../ui/Menu";
 import {
   ChartIcon, CogIcon, CoinsIcon, DotsIcon, FolderIcon, FolderPlusIcon, InboxIcon, LibraryIcon, LogoutIcon, PencilIcon, PlayIcon, TrashIcon, UploadIcon,
@@ -25,6 +26,8 @@ interface Props {
 }
 
 export function Sidebar(p: Props) {
+  const t = useTranslations("sidebar");
+  const { formatBytes } = useFormat();
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
 
@@ -54,44 +57,44 @@ export function Sidebar(p: Props) {
           onClick={p.onUpload}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm shadow-brand-600/25 transition hover:bg-brand-700"
         >
-          <UploadIcon /> Subir videos
+          <UploadIcon /> {t("upload")}
         </button>
       </div>
 
       <nav className="mt-6 flex-1 overflow-y-auto px-3 pb-4">
         <NavItem
           icon={<ChartIcon />}
-          label="Resumen"
+          label={t("overview")}
           active={isActive({ kind: "overview" })}
           onClick={() => p.onFilter({ kind: "overview" })}
         />
         <NavItem
           icon={<CoinsIcon />}
-          label="Monetización"
+          label={t("monetization")}
           active={isActive({ kind: "monetization" })}
           onClick={() => p.onFilter({ kind: "monetization" })}
         />
         {p.user.isAdmin && (
           <NavItem
             icon={<CogIcon />}
-            label="Administración"
+            label={t("admin")}
             active={isActive({ kind: "admin" })}
             onClick={() => p.onFilter({ kind: "admin" })}
           />
         )}
 
         <div className="mt-6" />
-        <SectionTitle>Biblioteca</SectionTitle>
+        <SectionTitle>{t("library")}</SectionTitle>
         <NavItem
           icon={<LibraryIcon />}
-          label="Todos los videos"
+          label={t("allVideos")}
           count={p.counts.all}
           active={isActive({ kind: "all" })}
           onClick={() => p.onFilter({ kind: "all" })}
         />
         <NavItem
           icon={<InboxIcon />}
-          label="Sin carpeta"
+          label={t("noFolder")}
           count={p.counts.none}
           active={isActive({ kind: "none" })}
           onClick={() => p.onFilter({ kind: "none" })}
@@ -99,12 +102,12 @@ export function Sidebar(p: Props) {
         />
 
         <div className="mt-6 flex items-center justify-between pr-1">
-          <SectionTitle>Carpetas</SectionTitle>
+          <SectionTitle>{t("folders")}</SectionTitle>
           <button
             onClick={() => setCreating(true)}
             className="mb-1.5 rounded-md p-1 text-zinc-400 transition hover:bg-zinc-200/70 hover:text-zinc-700"
-            aria-label="Nueva carpeta"
-            title="Nueva carpeta"
+            aria-label={t("newFolder")}
+            title={t("newFolder")}
           >
             <FolderPlusIcon />
           </button>
@@ -119,7 +122,7 @@ export function Sidebar(p: Props) {
               onChange={(e) => setName(e.target.value)}
               onBlur={submit}
               onKeyDown={(e) => e.key === "Escape" && (setName(""), setCreating(false))}
-              placeholder="Nombre de la carpeta"
+              placeholder={t("folderName")}
               className="w-full rounded-lg border border-brand-300 bg-white px-2.5 py-1.5 text-sm outline-none ring-2 ring-brand-100"
             />
           </form>
@@ -136,13 +139,13 @@ export function Sidebar(p: Props) {
             onDropVideos={(ids) => p.onDropVideos(ids, f.id)}
             menu={
               <Menu
-                label="Opciones de carpeta"
+                label={t("folderOptions")}
                 items={[
-                  { label: "Renombrar", icon: <PencilIcon />, onSelect: () => p.onRenameFolder(f) },
-                  { label: "Eliminar carpeta", icon: <TrashIcon />, onSelect: () => p.onDeleteFolder(f), danger: true },
+                  { label: t("rename"), icon: <PencilIcon />, onSelect: () => p.onRenameFolder(f) },
+                  { label: t("deleteFolder"), icon: <TrashIcon />, onSelect: () => p.onDeleteFolder(f), danger: true },
                 ]}
                 trigger={({ toggle }) => (
-                  <button onClick={toggle} className="rounded-md p-0.5 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700" aria-label="Opciones">
+                  <button onClick={toggle} className="rounded-md p-0.5 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700" aria-label={t("options")}>
                     <DotsIcon className="h-3.5 w-3.5" />
                   </button>
                 )}
@@ -156,16 +159,16 @@ export function Sidebar(p: Props) {
             onClick={() => setCreating(true)}
             className="mt-1 w-full rounded-lg border border-dashed border-zinc-300 px-3 py-3 text-xs text-zinc-500 transition hover:border-zinc-400 hover:text-zinc-700"
           >
-            Crea una carpeta para organizar tus videos
+            {t("emptyFolders")}
           </button>
         )}
       </nav>
 
       <div className="border-t border-zinc-200/80 p-3">
         <div className="rounded-xl bg-zinc-100/80 px-3 py-2.5">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Almacenamiento</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">{t("storage")}</p>
           <p className="mt-0.5 text-sm font-medium text-zinc-800">
-            {formatBytes(p.totalBytes)} <span className="font-normal text-zinc-500">· {p.counts.all} videos</span>
+            {formatBytes(p.totalBytes)} <span className="font-normal text-zinc-500">· {t("videoCount", { count: p.counts.all })}</span>
           </p>
         </div>
         <div className="mt-2 flex items-center gap-2.5 rounded-xl px-2 py-1.5">
@@ -176,7 +179,7 @@ export function Sidebar(p: Props) {
             {p.user.name && <p className="truncate text-sm font-medium">{p.user.name}</p>}
             <p className="truncate text-xs text-zinc-500">{p.user.email}</p>
           </div>
-          <button onClick={p.onLogout} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-200/70 hover:text-zinc-800" aria-label="Cerrar sesión" title="Cerrar sesión">
+          <button onClick={p.onLogout} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-200/70 hover:text-zinc-800" aria-label={t("logout")} title={t("logout")}>
             <LogoutIcon />
           </button>
         </div>

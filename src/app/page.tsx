@@ -1,6 +1,8 @@
 import Link from "next/link";
-import { APP_NAME } from "@/lib/brand";
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
+import { SiteFooter } from "@/components/legal/SiteFooter";
+import { APP_NAME } from "@/lib/brand";
 import { getSessionUser } from "@/server/auth/session";
 import { getMonetizationSettings, parseMetaTag } from "@/server/monetization/settings";
 
@@ -15,35 +17,31 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function Home() {
-  const user = await getSessionUser();
+  const [user, t] = await Promise.all([getSessionUser(), getTranslations("landing")]);
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 text-center">
-      <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700">
-        {APP_NAME}
-      </span>
-      <h1 className="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">
-        Sube, gestiona e incrusta tus videos.
-      </h1>
-      <p className="mt-4 max-w-xl text-zinc-600">
-        Subida directa y rápida, reproductor ligero y adaptable, y un código de inserción listo para
-        pegar en cualquier web.
-      </p>
-      <div className="mt-8 flex gap-3">
-        {user ? (
-          <Link href="/dashboard" className="rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-700">
-            Ir a mis videos
-          </Link>
-        ) : (
-          <>
-            <Link href="/register" className="rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-700">
-              Crear cuenta
+    <div className="flex min-h-screen flex-col">
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center justify-center px-6 py-20 text-center">
+        <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700">{APP_NAME}</span>
+        <h1 className="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">{t("title")}</h1>
+        <p className="mt-4 max-w-xl text-zinc-600">{t("subtitle")}</p>
+        <div className="mt-8 flex gap-3">
+          {user ? (
+            <Link href="/dashboard" className="rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-700">
+              {t("goToVideos")}
             </Link>
-            <Link href="/login" className="rounded-lg border border-zinc-300 bg-white px-5 py-2.5 text-sm font-medium hover:bg-zinc-100">
-              Iniciar sesión
-            </Link>
-          </>
-        )}
-      </div>
-    </main>
+          ) : (
+            <>
+              <Link href="/register" className="rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-700">
+                {t("createAccount")}
+              </Link>
+              <Link href="/login" className="rounded-lg border border-zinc-300 bg-white px-5 py-2.5 text-sm font-medium hover:bg-zinc-100">
+                {t("signIn")}
+              </Link>
+            </>
+          )}
+        </div>
+      </main>
+      <SiteFooter />
+    </div>
   );
 }

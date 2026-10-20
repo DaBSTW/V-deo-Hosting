@@ -9,42 +9,17 @@
  * de calidades cuando el manifiesto ofrece varias.
  */
 import "plyr/dist/plyr.css";
+import { useMessages, useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import type Plyr from "plyr";
 import { detectAdblock } from "@/lib/adblock";
 import type { PlaybackSource } from "@/server/video-providers/types";
 
-const I18N_ES = {
-  restart: "Reiniciar",
-  rewind: "Retroceder {seektime}s",
-  play: "Reproducir",
-  pause: "Pausa",
-  fastForward: "Avanzar {seektime}s",
-  seek: "Buscar",
-  played: "Reproducido",
-  buffered: "En búfer",
-  currentTime: "Tiempo actual",
-  duration: "Duración",
-  volume: "Volumen",
-  mute: "Silenciar",
-  unmute: "Activar sonido",
-  enterFullscreen: "Pantalla completa",
-  exitFullscreen: "Salir de pantalla completa",
-  pip: "Imagen en imagen",
-  settings: "Ajustes",
-  menuBack: "Volver",
-  speed: "Velocidad",
-  normal: "Normal",
-  quality: "Calidad",
-  loop: "Bucle",
-  qualityLabel: { 0: "Auto" },
-};
 
 const BASE_OPTIONS: Plyr.Options = {
   controls: ["play-large", "play", "progress", "current-time", "duration", "mute", "volume", "settings", "pip", "fullscreen"],
   settings: ["quality", "speed"],
   speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] },
-  i18n: I18N_ES,
   keyboard: { focused: true, global: true },
   fullscreen: { enabled: true, fallback: true, iosNative: true },
   storage: { enabled: true, key: "player" },
@@ -68,6 +43,11 @@ export function VideoPlayer({
   /** Segundos reproducidos para que la vista sea monetizable (`undefined` = sin monetizar). */
   qualifyAfterSec?: number;
 }) {
+  const t = useTranslations("player");
+  const messages = useMessages();
+  // Textos de los controles de Plyr, sin pasar por ICU: {seektime} lo sustituye Plyr.
+  const plyrI18n = useRef<Record<string, unknown>>({});
+  plyrI18n.current = { ...messages.player.plyr, qualityLabel: { 0: t("auto") } };
   const videoRef = useRef<HTMLVideoElement>(null);
   const [failed, setFailed] = useState(false);
 
@@ -124,7 +104,7 @@ export function VideoPlayer({
     const mount = async (extra: Partial<Plyr.Options> = {}) => {
       const { default: PlyrCtor } = await import("plyr");
       if (disposed) return;
-      player = new PlyrCtor(video, { ...BASE_OPTIONS, autoplay: autoPlay, ...extra });
+      player = new PlyrCtor(video, { ...BASE_OPTIONS, i18n: plyrI18n.current, autoplay: autoPlay, ...extra });
     };
 
     (async () => {
@@ -202,7 +182,7 @@ export function VideoPlayer({
       />
       {failed && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/80 px-6 text-center text-sm text-zinc-200">
-          No se pudo reproducir el video. Recarga la página para intentarlo de nuevo.
+          {t("failed")}
         </div>
       )}
     </div>

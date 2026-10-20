@@ -8,16 +8,16 @@ import { HttpError, readJson, route } from "@/server/http";
 import { clientIp, rateLimit } from "@/server/rate-limit";
 
 export const POST = route(async (req) => {
-  if (!getCoreEnv().ALLOW_REGISTRATION) throw new HttpError(403, "El registro está deshabilitado");
+  if (!getCoreEnv().ALLOW_REGISTRATION) throw new HttpError(403, "registrationDisabled");
   rateLimit(`register:${clientIp(req)}`, 5, 60 * 60 * 1000);
 
   const { email, password, name } = registerSchema.parse(await readJson(req));
   if (await prisma.user.findUnique({ where: { email }, select: { id: true } })) {
-    throw new HttpError(409, "Ya existe una cuenta con ese email");
+    throw new HttpError(409, "emailTaken");
   }
 
   const user = await prisma.user.create({
-    data: { email, name: name || null, passwordHash: await hashPassword(password) },
+    data: { email, name: name || null, passwordHash: await hashPassword(password), termsAcceptedAt: new Date() },
   });
 
   const res = NextResponse.json({ ok: true }, { status: 201 });

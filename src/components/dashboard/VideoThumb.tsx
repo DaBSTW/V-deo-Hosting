@@ -1,12 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { formatDuration } from "@/lib/format";
+import { useTranslations } from "next-intl";
+import { useFormat } from "@/i18n/useFormat";
 import { AlertIcon, FilmIcon, PlayIcon } from "../ui/icons";
 import type { PublicVideo } from "./types";
 
 /** Miniatura 16:9 con duración y capa de estado. */
 export function VideoThumb({ video, size = "lg" }: { video: PublicVideo; size?: "lg" | "sm" }) {
+  const t = useTranslations("video");
+  const { formatDuration } = useFormat();
   const [failed, setFailed] = useState(false);
   const showImage = video.thumbnailUrl && !failed;
   const lg = size === "lg";
@@ -38,14 +41,14 @@ export function VideoThumb({ video, size = "lg" }: { video: PublicVideo; size?: 
       {(video.status === "processing" || video.status === "uploading") && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-zinc-950/60 text-white backdrop-blur-[2px]">
           <span className={`animate-spin rounded-full border-2 border-white/30 border-t-white ${lg ? "h-7 w-7" : "h-4 w-4"}`} />
-          {lg && <span className="text-xs font-medium">{video.status === "processing" ? "Procesando…" : "Subiendo…"}</span>}
+          {lg && <span className="text-xs font-medium">{video.status === "processing" ? t("processing") : t("uploadingShort")}</span>}
         </div>
       )}
 
       {video.status === "error" && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-red-950/70 text-red-100">
           <AlertIcon className={lg ? "h-6 w-6" : "h-4 w-4"} />
-          {lg && <span className="text-xs font-medium">No disponible</span>}
+          {lg && <span className="text-xs font-medium">{t("unavailable")}</span>}
         </div>
       )}
 

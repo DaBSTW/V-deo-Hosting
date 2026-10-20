@@ -3,6 +3,7 @@
  * normalizados por el servicio; no sabe qué proveedor hay detrás.
  */
 import { notFound } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { cache } from "react";
 import { isPublicVideoId } from "@/lib/ids";
 import { PlayerMessage } from "@/components/player/PlayerMessage";
@@ -18,11 +19,12 @@ export const loadEmbed = cache(async (publicId: string) => {
 });
 
 export function EmbedBody({ data, autoPlay }: { data: Awaited<ReturnType<typeof loadEmbed>>; autoPlay?: boolean }) {
+  const t = useTranslations("player");
   switch (data.state) {
     case "processing":
-      return <PlayerMessage title={data.title} message="Este video se está procesando. Vuelve en unos minutos." />;
+      return <PlayerMessage title={data.title} message={t("processing")} />;
     case "error":
-      return <PlayerMessage title={data.title} message="Este video no está disponible." />;
+      return <PlayerMessage title={data.title} message={t("unavailable")} />;
     case "ready":
       return (
         <VideoPlayer

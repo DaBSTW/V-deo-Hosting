@@ -64,7 +64,7 @@ export async function createUpload(
   { folderId, ...input }: CreateUploadInput,
 ): Promise<UploadTicketResponse> {
   if (input.sizeBytes > maxUploadBytes()) {
-    throw new HttpError(413, `El archivo supera el máximo de ${getCoreEnv().MAX_UPLOAD_MB} MB`);
+    throw new HttpError(413, "fileTooLarge", { maxMb: getCoreEnv().MAX_UPLOAD_MB });
   }
   if (folderId) await findOwnedFolder(userId, folderId);
   await assertQuota(userId, input.sizeBytes);
@@ -106,7 +106,7 @@ async function assertQuota(userId: string, incomingBytes: number) {
     _sum: { sizeBytes: true },
   });
   if (Number(_sum.sizeBytes ?? 0) + incomingBytes > quota) {
-    throw new HttpError(413, "Has alcanzado tu límite de almacenamiento. Libera espacio borrando videos.");
+    throw new HttpError(413, "storageQuotaReached");
   }
 }
 
@@ -120,7 +120,7 @@ export async function confirmUpload(
 
   const updated = await runConfirm(video, hints.durationSec, hints.hasThumbnail);
   if (updated.status === "PENDING_UPLOAD") {
-    throw new HttpError(409, "La subida aún no ha finalizado");
+    throw new HttpError(409, "uploadNotFinished");
   }
   return toPublicVideo(updated);
 }
@@ -217,7 +217,7 @@ export async function getVideo(userId: string, publicId: string): Promise<Public
 async function findOwned(userId: string, publicId: string): Promise<Video> {
   const video = await prisma.video.findUnique({ where: { publicId } });
   // 404 también si no es suyo: no revelamos la existencia de videos ajenos.
-  if (!video || video.userId !== userId) throw new HttpError(404, "Video no encontrado");
+  if (!video || video.userId !== userId) throw new HttpError(404, "videoNotFound");
   return video;
 }
 
@@ -274,7 +274,7 @@ export async function listFolders(userId: string): Promise<PublicFolder[]> {
 
 export async function createFolder(userId: string, name: string): Promise<PublicFolder> {
   if ((await prisma.folder.count({ where: { userId } })) >= 200) {
-    throw new HttpError(400, "Has alcanzado el máximo de carpetas");
+    throw new HttpError(400, "folderLimit");
   }
   try {
     return toPublicFolder(await prisma.folder.create({ data: { userId, name } }));
@@ -300,13 +300,13 @@ export async function deleteFolder(userId: string, id: string): Promise<void> {
 
 async function findOwnedFolder(userId: string, id: string) {
   const folder = await prisma.folder.findUnique({ where: { id } });
-  if (!folder || folder.userId !== userId) throw new HttpError(404, "Carpeta no encontrada");
+  if (!folder || folder.userId !== userId) throw new HttpError(404, "folderNotFound");
   return folder;
 }
 
 function uniqueNameError(err: unknown): unknown {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002"
-    ? new HttpError(409, "Ya tienes una carpeta con ese nombre")
+    ? new HttpError(409, "folderNameTaken")
     : err;
 }
 
@@ -332,7 +332,8 @@ export type EmbedLookup =
     };
 
 export interface PublicDownloadOption {
-  label: string;
+  kind: "original" | "rendition" | "single";
+  height: number | null;
   sizeBytes: number | null;
   /** Ruta propia firmada: `/media/<id>/download?q=<calidad>&…` */
   path: string;
@@ -359,7 +360,7 @@ export async function getEmbedPlayback(publicId: string): Promise<EmbedLookup> {
   const downloads = downloadsEnabled(video)
     ? getAdapter(video.provider)
         .listDownloadOptions(refOf(video), Number(video.sizeBytes))
-        .map((o) => ({ label: o.label, sizeBytes: o.sizeBytes ?? null, path: mediaPath(publicId, "download", o.id) }))
+        .map((o) => ({ kind: o.kind, height: o.height ?? null, sizeBytes: o.sizeBytes ?? null, path: mediaPath(publicId, "download", o.id) }))
     : [];
   return {
     state: "ready",
@@ -451,5 +452,5 @@ export async function handleProviderWebhook(req: WebhookRequest): Promise<{ proc
     }
     return { processed };
   }
-  throw new HttpError(400, "Webhook no reconocido");
+  throw new HttpError(400, "webhookUnknown");
 }

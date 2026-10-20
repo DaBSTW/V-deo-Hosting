@@ -14,30 +14,26 @@ import { HttpError } from "../http";
 import { seal, sealText, unseal, unsealText } from "./crypto";
 import { deleteDocument, getDocument, putDocument } from "./storage";
 
-export const DOCUMENT_TYPES = {
-  ID_CARD: "Documento nacional de identidad",
-  PASSPORT: "Pasaporte",
-  DRIVER_LICENSE: "Licencia de conducir",
-} as const;
-export type DocumentType = keyof typeof DOCUMENT_TYPES;
+export const DOCUMENT_TYPES = ["ID_CARD", "PASSPORT", "DRIVER_LICENSE"] as const;
+export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 export type KycFileKind = "front" | "back" | "selfie";
 
 const MAX_FILE_BYTES = 6 * 1024 * 1024;
 
 const formSchema = z.object({
-  fullName: z.string().trim().min(5, "Escribe tu nombre completo tal como aparece en el documento").max(120),
+  fullName: z.string().trim().min(5, "kycNameInvalid").max(120),
   birthDate: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha de nacimiento inválida")
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "birthDateInvalid")
     .refine((d) => {
       const birth = new Date(`${d}T00:00:00Z`);
       const adult = new Date(birth);
       adult.setUTCFullYear(adult.getUTCFullYear() + 18);
       return birth.getUTCFullYear() > 1900 && adult <= new Date();
-    }, "Debes ser mayor de 18 años"),
-  country: z.string().regex(/^[A-Z]{2}$/, "Selecciona tu país"),
-  documentType: z.enum(Object.keys(DOCUMENT_TYPES) as [DocumentType, ...DocumentType[]]),
-  documentNumber: z.string().trim().min(4, "Número de documento inválido").max(40),
+    }, "mustBeAdult"),
+  country: z.string().regex(/^[A-Z]{2}$/, "countryRequired"),
+  documentType: z.enum(DOCUMENT_TYPES),
+  documentNumber: z.string().trim().min(4, "documentNumberInvalid").max(40),
 });
 
 /** Comprueba la firma real del archivo (no fiarse del tipo declarado). */
@@ -51,20 +47,14 @@ function sniffImage(buf: Buffer): "image/jpeg" | "image/png" | "image/webp" | nu
 async function readImage(form: FormData, field: KycFileKind, required: boolean): Promise<Buffer | null> {
   const file = form.get(field);
   if (!(file instanceof File) || file.size === 0) {
-    if (required) throw new HttpError(400, `Falta la foto: ${FILE_LABELS[field]}`);
+    if (required) throw new HttpError(400, "kycPhotoMissing", { file: field });
     return null;
   }
-  if (file.size > MAX_FILE_BYTES) throw new HttpError(413, `La foto «${FILE_LABELS[field]}» supera 6 MB`);
+  if (file.size > MAX_FILE_BYTES) throw new HttpError(413, "kycPhotoTooLarge", { file: field });
   const buf = Buffer.from(await file.arrayBuffer());
-  if (!sniffImage(buf)) throw new HttpError(400, `«${FILE_LABELS[field]}» debe ser una imagen JPG, PNG o WebP`);
+  if (!sniffImage(buf)) throw new HttpError(400, "kycPhotoInvalid", { file: field });
   return buf;
 }
-
-export const FILE_LABELS: Record<KycFileKind, string> = {
-  front: "Frente del documento",
-  back: "Dorso del documento",
-  selfie: "Selfie con el documento",
-};
 
 // ---------------------------------------------------------------------------
 // Usuario
@@ -85,8 +75,8 @@ export async function getKycStatus(userId: string) {
 
 export async function submitVerification(userId: string, form: FormData) {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { kycStatus: true } });
-  if (user.kycStatus === "PENDING") throw new HttpError(409, "Ya tienes una verificación en revisión");
-  if (user.kycStatus === "APPROVED") throw new HttpError(409, "Tu identidad ya está verificada");
+  if (user.kycStatus === "PENDING") throw new HttpError(409, "kycAlreadyPending");
+  if (user.kycStatus === "APPROVED") throw new HttpError(409, "kycAlreadyApproved");
 
   const data = formSchema.parse(Object.fromEntries(["fullName", "birthDate", "country", "documentType", "documentNumber"].map((k) => [k, form.get(k) ?? ""])));
   const front = await readImage(form, "front", true);
@@ -160,9 +150,9 @@ export async function listVerifications(status: KycStatus = "PENDING") {
 }
 
 export async function reviewVerification(id: string, action: "approve" | "reject", adminEmail: string, note?: string) {
-  if (action === "reject" && !note?.trim()) throw new HttpError(400, "Indica el motivo del rechazo (lo verá el usuario)");
+  if (action === "reject" && !note?.trim()) throw new HttpError(400, "kycRejectReasonRequired");
   const v = await prisma.identityVerification.findUnique({ where: { id } });
-  if (!v || v.status !== "PENDING") throw new HttpError(409, "La verificación ya fue revisada o no existe");
+  if (!v || v.status !== "PENDING") throw new HttpError(409, "kycAlreadyReviewed");
   const status: KycStatus = action === "approve" ? "APPROVED" : "REJECTED";
   await prisma.$transaction([
     prisma.identityVerification.update({
@@ -177,7 +167,7 @@ export async function reviewVerification(id: string, action: "approve" | "reject
 export async function readVerificationFile(id: string, kind: KycFileKind) {
   const v = await prisma.identityVerification.findUnique({ where: { id } });
   const key = (v?.files as Partial<Record<KycFileKind, string>> | undefined)?.[kind];
-  if (!v || !key || v.filesPurgedAt) throw new HttpError(404, "Documento no disponible");
+  if (!v || !key || v.filesPurgedAt) throw new HttpError(404, "documentUnavailable");
   const plain = unseal(await getDocument(key));
   return { body: plain, contentType: sniffImage(plain) ?? "application/octet-stream" };
 }

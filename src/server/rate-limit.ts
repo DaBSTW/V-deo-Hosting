@@ -18,7 +18,7 @@ export function rateLimit(key: string, limit: number, windowMs: number) {
     return;
   }
   if (++bucket.count > limit) {
-    throw new HttpError(429, "Demasiadas peticiones. Espera un momento.");
+    throw new HttpError(429, "tooManyRequests");
   }
 }
 

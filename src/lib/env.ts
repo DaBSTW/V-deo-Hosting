@@ -80,6 +80,14 @@ const coreSchema = z.object({
   KYC_STORAGE_DIR: z.string().default("./storage/kyc"),
   /** Días que se conservan las imágenes tras la decisión (luego se borran). */
   KYC_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
+  // --- Datos del operador para las páginas legales ---------------------------
+  LEGAL_ENTITY_NAME: z.string().optional(),
+  LEGAL_CONTACT_EMAIL: z.string().default("legal@example.com"),
+  LEGAL_DMCA_EMAIL: z.string().optional(),
+  LEGAL_ADDRESS: z.string().default(""),
+  LEGAL_JURISDICTION: z.string().default(""),
+  /** Fecha de la última revisión de los textos legales (AAAA-MM-DD). */
+  LEGAL_LAST_UPDATED: z.string().default("2026-10-20"),
   /** Emails con acceso al panel de administración (separados por comas). */
   ADMIN_EMAILS: z
     .string()

@@ -38,6 +38,8 @@ model User {
   email        String   @unique
   passwordHash String
   name         String?
+  /// Cuándo aceptó los Términos y la Política de privacidad (al registrarse).
+  termsAcceptedAt DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

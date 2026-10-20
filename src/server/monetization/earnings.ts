@@ -10,8 +10,8 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { HttpError } from "../http";
 import { flushStats } from "../videos/stats-buffer";
-import { getMonetizationSettings, PAYOUT_METHODS, type PayoutMethod } from "./settings";
-import { TIER_COUNTRIES, TIER_LABELS, TIERS, type Tier } from "./tiers";
+import { getMonetizationSettings, PAYOUT_METHOD_IDS, type PayoutMethod } from "./settings";
+import { TIER_COUNTRIES, TIERS, type Tier } from "./tiers";
 import { getKycStatus } from "../kyc/service";
 
 const DAY = 86_400_000;
@@ -29,15 +29,27 @@ export interface MonetizationOverview {
   userEnabled: boolean;
   payout: { method: PayoutMethod | null; details: string | null };
   balance: { availableMicros: number; heldMicros: number; monthMicros: number; paidMicros: number; lifetimeMicros: number };
-  /** `needsKyc`: todo lo demás está listo y solo falta verificar la identidad. */
-  canRequest: { ok: boolean; reason: string | null; minUsd: number | null; needsKyc: boolean };
+  /**
+   * `reason`: por qué no puede cobrar (código traducible en la interfaz).
+   * `needsKyc`: todo lo demás está listo y solo falta verificar la identidad.
+   */
+  canRequest: { ok: boolean; reason: PayoutBlockReason | null; minUsd: number | null; needsKyc: boolean };
   daily: { date: string; amountMicros: number; views: number }[];
-  byTier: { tier: Tier; label: string; countries: string; views: number; amountMicros: number; rateUsd: number }[];
+  byTier: { tier: Tier; countries: string[] | null; views: number; amountMicros: number; rateUsd: number }[];
   topVideos: { id: string; title: string; paidViews: number }[];
   payouts: { id: string; amountMicros: number; method: string; status: string; reference: string | null; note: string | null; createdAt: string; processedAt: string | null }[];
   rules: { minWatchSeconds: number; holdDays: number; perIpDailyCap: number };
-  methods: { id: PayoutMethod; label: string; detailsLabel: string; placeholder: string; minUsd: number }[];
+  methods: { id: PayoutMethod; minUsd: number }[];
 }
+
+export type PayoutBlockReason =
+  | "platformDisabled"
+  | "noMethod"
+  | "methodUnavailable"
+  | "payoutInProgress"
+  | "belowMinimum"
+  | "kycPending"
+  | "kycRequired";
 
 async function balanceOf(tx: Prisma.TransactionClient, userId: string, holdDays: number) {
   const cutoff = new Date(utcToday().getTime() - holdDays * DAY);
@@ -101,20 +113,20 @@ export async function getMonetizationOverview(userId: string): Promise<Monetizat
   const method = (user.payoutMethod as PayoutMethod | null) ?? null;
   const methodCfg = method ? settings.payoutMethods[method] : undefined;
   const minUsd = methodCfg?.minUsd ?? null;
-  const reason = !settings.enabled
-    ? "La monetización está desactivada en la plataforma."
+  const reason: PayoutBlockReason | null = !settings.enabled
+    ? "platformDisabled"
     : !method || !user.payoutDetails
-      ? "Configura tu método de cobro."
+      ? "noMethod"
       : !methodCfg?.enabled
-        ? "Ese método de cobro ya no está disponible; elige otro."
+        ? "methodUnavailable"
         : openPayout
-          ? "Ya tienes un pago en curso."
+          ? "payoutInProgress"
           : balance.availableMicros < (minUsd ?? 0) * 1e6
-            ? `El mínimo para cobrar con ${PAYOUT_METHODS[method].label} es ${minUsd} USD.`
+            ? "belowMinimum"
             : kyc.status === "PENDING"
-              ? "Tu verificación de identidad está en revisión."
+              ? "kycPending"
               : kyc.status !== "APPROVED"
-                ? "Verifica tu identidad para cobrar."
+                ? "kycRequired"
                 : null;
 
   return {
@@ -127,10 +139,10 @@ export async function getMonetizationOverview(userId: string): Promise<Monetizat
       ok: reason === null,
       reason,
       minUsd,
-      needsKyc: reason === "Verifica tu identidad para cobrar.",
+      needsKyc: reason === "kycRequired",
     },
     daily,
-    byTier: TIERS.map((t) => ({ tier: t, label: TIER_LABELS[t], countries: TIER_COUNTRIES[t], ...tierAgg[t], rateUsd: settings.rates[t] })),
+    byTier: TIERS.map((t) => ({ tier: t, countries: TIER_COUNTRIES[t], ...tierAgg[t], rateUsd: settings.rates[t] })),
     topVideos: top.map((t) => ({ id: t.publicId, title: t.title, paidViews: num(t.paid) })),
     payouts: payouts.map((p) => ({
       id: p.id,
@@ -143,18 +155,19 @@ export async function getMonetizationOverview(userId: string): Promise<Monetizat
       processedAt: p.processedAt?.toISOString() ?? null,
     })),
     rules: { minWatchSeconds: settings.minWatchSeconds, holdDays: settings.holdDays, perIpDailyCap: settings.perIpDailyCap },
-    methods: (Object.keys(PAYOUT_METHODS) as PayoutMethod[])
-      .filter((m) => settings.payoutMethods[m]?.enabled)
-      .map((m) => ({ id: m, ...PAYOUT_METHODS[m], minUsd: settings.payoutMethods[m].minUsd })),
+    methods: PAYOUT_METHOD_IDS.filter((m) => settings.payoutMethods[m]?.enabled).map((m) => ({
+      id: m,
+      minUsd: settings.payoutMethods[m].minUsd,
+    })),
   };
 }
 
 // ---------------------------------------------------------------------------
 const DETAIL_RULES: Record<PayoutMethod, z.ZodType<string>> = {
-  PAYPAL: z.string().trim().email("Introduce un email de PayPal válido"),
-  PAYONEER: z.string().trim().email("Introduce un email de Payoneer válido"),
-  USDT_TRC20: z.string().trim().regex(/^T[1-9A-HJ-NP-Za-km-z]{33}$/, "Dirección TRC20 no válida (empieza por T y tiene 34 caracteres)"),
-  BANK: z.string().trim().min(15, "Incluye titular, banco, IBAN/CLABE y SWIFT").max(500),
+  PAYPAL: z.string().trim().email("invalidPaypalEmail"),
+  PAYONEER: z.string().trim().email("invalidPayoneerEmail"),
+  USDT_TRC20: z.string().trim().regex(/^T[1-9A-HJ-NP-Za-km-z]{33}$/, "invalidTrc20"),
+  BANK: z.string().trim().min(15, "invalidBankDetails").max(500),
 };
 
 export async function updateMonetizationPrefs(
@@ -166,8 +179,8 @@ export async function updateMonetizationPrefs(
   if (patch.payoutMethod !== undefined) {
     const settings = await getMonetizationSettings();
     const method = patch.payoutMethod as PayoutMethod;
-    if (!(method in PAYOUT_METHODS) || !settings.payoutMethods[method]?.enabled) {
-      throw new HttpError(400, "Método de cobro no disponible");
+    if (!PAYOUT_METHOD_IDS.includes(method) || !settings.payoutMethods[method]?.enabled) {
+      throw new HttpError(400, "payoutMethodUnavailable");
     }
     data.payoutMethod = method;
     data.payoutDetails = DETAIL_RULES[method].parse(patch.payoutDetails ?? "");
@@ -185,13 +198,13 @@ export async function requestPayout(userId: string) {
       const { availableMicros, openPayout } = await balanceOf(tx, userId, settings.holdDays);
       const method = user.payoutMethod as PayoutMethod | null;
       const cfg = method ? settings.payoutMethods[method] : undefined;
-      if (!settings.enabled) throw new HttpError(400, "La monetización está desactivada");
-      if (!method || !user.payoutDetails || !cfg?.enabled) throw new HttpError(400, "Configura un método de cobro válido");
-      if (openPayout) throw new HttpError(409, "Ya tienes un pago en curso");
-      if (availableMicros < cfg.minUsd * 1e6) throw new HttpError(400, `El mínimo para cobrar es ${cfg.minUsd} USD`);
+      if (!settings.enabled) throw new HttpError(400, "monetizationDisabled");
+      if (!method || !user.payoutDetails || !cfg?.enabled) throw new HttpError(400, "payoutMethodInvalid");
+      if (openPayout) throw new HttpError(409, "payoutInProgress");
+      if (availableMicros < cfg.minUsd * 1e6) throw new HttpError(400, "belowMinimum", { min: cfg.minUsd });
       // Identidad verificada obligatoria (se pide al solicitar el primer pago).
       if (user.kycStatus !== "APPROVED") {
-        throw new HttpError(403, user.kycStatus === "PENDING" ? "Tu verificación de identidad está en revisión" : "Verifica tu identidad antes de cobrar");
+        throw new HttpError(403, user.kycStatus === "PENDING" ? "kycPending" : "kycRequired");
       }
       return tx.payout.create({
         data: { userId, amountMicros: BigInt(availableMicros), method, details: user.payoutDetails },

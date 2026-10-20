@@ -114,6 +114,49 @@ workers/r2-event-forwarder               (opcional) Worker: eventos R2 → webho
 
 ---
 
+## Idiomas (i18n)
+
+La plataforma completa está en **español e inglés** con [`next-intl`](https://next-intl.dev):
+
+* **Detección automática:** se usa la cookie `NEXT_LOCALE` si el usuario eligió idioma; si no, la cabecera
+  `Accept-Language` del navegador (respetando sus pesos `q=`). Si el navegador no pide español ni inglés,
+  se muestra en **inglés**.
+* **Selector de idioma** en el footer (guarda la cookie y recarga los datos sin cambiar de página).
+* **Las URLs no llevan idioma**: los enlaces `/v/…` y `/embed/…` ya compartidos funcionan igual en ambos.
+* **Mensajes** en `src/i18n/messages/es.ts` (referencia) y `en.ts`. Las claves están **tipadas**: una clave
+  inexistente o una traducción que falta no compila.
+* **Errores de la API:** el servidor responde con el mensaje en el idioma de la petición (`HttpError` usa claves
+  de `errors.*`), además de un `code` estable para integraciones.
+* **Formatos** de números, fechas y moneda según el idioma (`useFormat()` en cliente, `makeFormatters()` en servidor).
+* El reproductor (controles de Plyr), la página pública, el embed y la página «Preparando descarga» también se traducen.
+
+Para añadir un idioma: crea `src/i18n/messages/<código>.ts` tipado como `Messages`, añádelo a `LOCALES` en
+`src/i18n/config.ts` y a `messagesFor()`. Si quieres versiones de las páginas legales en ese idioma, añade también su archivo en `src/content/legal/`.
+
+## Páginas legales
+
+En `/legal/<página>`, enlazadas desde el footer de todas las páginas (portada, acceso, dashboard, enlace directo):
+
+| Página | Ruta |
+|---|---|
+| Términos de servicio | `/legal/terms` |
+| Política de privacidad | `/legal/privacy` |
+| Política de cookies | `/legal/cookies` |
+| Derechos de autor (DMCA) | `/legal/copyright` |
+| Uso aceptable | `/legal/acceptable-use` |
+| Términos del programa de monetización | `/legal/monetization` |
+
+* Textos en `src/content/legal/es.ts` y `en.ts`, adaptados a esta plataforma: alojamiento de video, anuncios de
+  Monetag, pagos con mínimo de 25 USD, verificación de identidad cifrada con retención limitada, cookies reales
+  (`vh_session`, `NEXT_LOCALE`) y política de infractores reincidentes.
+* Los datos del operador se toman de `LEGAL_ENTITY_NAME`, `LEGAL_CONTACT_EMAIL`, `LEGAL_DMCA_EMAIL`, `LEGAL_ADDRESS`,
+  `LEGAL_JURISDICTION` y `LEGAL_LAST_UPDATED`.
+* Al registrarse es **obligatorio aceptar** los Términos y la Política de privacidad. Se guarda la fecha en
+  `User.termsAcceptedAt`.
+* **Importante:** son una base de partida, no asesoramiento legal. Haz que un abogado de tu jurisdicción los revise,
+  sobre todo la ley aplicable, los plazos de conservación fiscal y la política de contenido adulto (prohibido por defecto).
+  Si tienes tráfico de la UE, añade un gestor de consentimiento (CMP) para las cookies publicitarias.
+
 ## Dashboard
 
 * Barra lateral con **Todos los videos**, **Sin carpeta** y las **carpetas** del usuario (crear,

@@ -109,11 +109,12 @@ export type DownloadResult =
   | { status: "preparing" }
   | { status: "unavailable"; reason?: string };
 
-/** Una calidad descargable (p. ej. "Original", "720p"). */
+/** Una calidad descargable. La etiqueta visible se traduce en la interfaz según `kind`. */
 export interface DownloadOption {
   /** Identificador opaco para pedirla (`original`, `720`, `default`…). */
   id: string;
-  label: string;
+  /** original = archivo subido · rendition = calidad generada · single = único MP4 del proveedor */
+  kind: "original" | "rendition" | "single";
   height?: number | null;
   sizeBytes?: number | null;
 }

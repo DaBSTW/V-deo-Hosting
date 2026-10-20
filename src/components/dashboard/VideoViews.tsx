@@ -1,7 +1,8 @@
 "use client";
 
 import type { DragEvent } from "react";
-import { formatBytes, formatCount, formatRelative } from "@/lib/format";
+import { useTranslations } from "next-intl";
+import { useFormat } from "@/i18n/useFormat";
 import { Menu } from "../ui/Menu";
 import { CheckIcon, DotsIcon, FolderIcon } from "../ui/icons";
 import { StatusBadge } from "./StatusBadge";
@@ -25,11 +26,12 @@ function dragStart(e: DragEvent, v: PublicVideo, selected: Set<string>) {
 }
 
 function SelectBox({ checked, onToggle, className = "" }: { checked: boolean; onToggle: (range: boolean) => void; className?: string }) {
+  const t = useTranslations("video");
   return (
     <button
       role="checkbox"
       aria-checked={checked}
-      aria-label="Seleccionar"
+      aria-label={t("select")}
       onClick={(e) => {
         e.stopPropagation();
         onToggle(e.shiftKey);
@@ -44,14 +46,15 @@ function SelectBox({ checked, onToggle, className = "" }: { checked: boolean; on
 }
 
 function MoreButton({ v, actions, folders }: { v: PublicVideo; actions: VideoActions; folders: PublicFolder[] }) {
+  const t = useTranslations("video");
   return (
     <Menu
-      label="Acciones del video"
-      items={videoMenuItems(v, actions, folders)}
+      label={t("menuLabel")}
+      items={videoMenuItems(v, actions, folders, t)}
       trigger={({ toggle, open }) => (
         <button
           onClick={toggle}
-          aria-label="Más acciones"
+          aria-label={t("moreActions")}
           className={`rounded-lg p-1.5 transition ${open ? "bg-zinc-100 text-zinc-900" : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-900"}`}
         >
           <DotsIcon />
@@ -65,6 +68,8 @@ function MoreButton({ v, actions, folders }: { v: PublicVideo; actions: VideoAct
 // Cuadrícula
 // ---------------------------------------------------------------------------
 export function VideoGrid({ videos, folders, actions, selected, onToggleSelect }: ViewProps) {
+  const t = useTranslations("video");
+  const { formatCount, formatRelative } = useFormat();
   const folderName = (id: string | null) => folders.find((f) => f.id === id)?.name;
   const selecting = selected.size > 0;
 
@@ -84,7 +89,7 @@ export function VideoGrid({ videos, folders, actions, selected, onToggleSelect }
             <button
               onClick={() => (selecting ? onToggleSelect(v.id, false) : actions.open(v))}
               className="block w-full overflow-hidden rounded-t-2xl text-left"
-              aria-label={`Abrir ${v.title}`}
+              aria-label={t("openTitle", { title: v.title })}
             >
               <VideoThumb video={v} />
             </button>
@@ -98,7 +103,7 @@ export function VideoGrid({ videos, folders, actions, selected, onToggleSelect }
                 <p className="truncate text-sm font-semibold text-zinc-900" title={v.title}>{v.title}</p>
                 <div className="mt-1 flex items-center gap-1.5 text-xs text-zinc-500">
                   {v.status === "ready" ? (
-                    <span>{formatCount(v.views)} {v.views === 1 ? "reproducción" : "reproducciones"}</span>
+                    <span>{t("views", { count: v.views, formatted: formatCount(v.views) })}</span>
                   ) : (
                     <StatusBadge status={v.status} />
                   )}
@@ -125,16 +130,18 @@ export function VideoGrid({ videos, folders, actions, selected, onToggleSelect }
 // Lista
 // ---------------------------------------------------------------------------
 export function VideoList({ videos, folders, actions, selected, onToggleSelect }: ViewProps) {
+  const t = useTranslations("video");
+  const { formatBytes, formatRelative } = useFormat();
   const folderName = (id: string | null) => folders.find((f) => f.id === id)?.name ?? "—";
 
   return (
     <div className="overflow-visible rounded-2xl bg-white ring-1 ring-zinc-200/80">
       <div className="hidden grid-cols-[minmax(0,1fr)_120px_90px_110px_130px_40px] items-center gap-4 border-b border-zinc-100 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 md:grid">
-        <span>Video</span>
-        <span>Estado</span>
-        <span>Tamaño</span>
-        <span>Carpeta</span>
-        <span>Subido</span>
+        <span>{t("columns.video")}</span>
+        <span>{t("columns.status")}</span>
+        <span>{t("columns.size")}</span>
+        <span>{t("columns.folder")}</span>
+        <span>{t("columns.uploaded")}</span>
         <span />
       </div>
       <ul className="divide-y divide-zinc-100">
