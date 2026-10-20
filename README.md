@@ -133,6 +133,17 @@ La plataforma completa está en **español e inglés** con [`next-intl`](https:/
 Para añadir un idioma: crea `src/i18n/messages/<código>.ts` tipado como `Messages`, añádelo a `LOCALES` en
 `src/i18n/config.ts` y a `messagesFor()`. Si quieres versiones de las páginas legales en ese idioma, añade también su archivo en `src/content/legal/`.
 
+## Landing page (`/`)
+
+Portada de presentación en `src/app/page.tsx` (ilustración del hero en `src/components/home/HeroMockup.tsx`, HTML/CSS
+sin imágenes). Secciones: hero, funciones, cómo funciona, código de inserción, monetización, preguntas frecuentes y
+llamada final. Todo el texto está en el bloque `landing` de los mensajes (es/en).
+
+* Las **tarifas por 1.000 vistas** se leen de los ajustes reales de monetización y solo se muestran si está activada.
+* El mínimo de retiro, el tamaño máximo de subida y los segundos de una vista monetizada salen de la configuración
+  (`MIN_PAYOUT_USD`, `MAX_UPLOAD_MB`, ajustes de administración); no hay cifras inventadas.
+* Si el usuario ya tiene sesión, los botones llevan a su panel.
+
 ## Páginas legales
 
 En `/legal/<página>`, enlazadas desde el footer de todas las páginas (portada, acceso, dashboard, enlace directo):
