@@ -4,7 +4,7 @@
  * Copia el secreto en CF_STREAM_WEBHOOK_SECRET.
  */
 import "./_env";
-import { getCoreEnv, getStreamEnv } from "@/lib/env";
+import { getCoreEnv, getStreamEnv } from "#srv/env";
 
 async function main() {
   const env = getStreamEnv();

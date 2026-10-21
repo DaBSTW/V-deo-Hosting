@@ -1,0 +1,30 @@
+import { requireApiUser } from "#srv/auth/session";
+import { HttpError, handler, json, methods } from "#srv/http";
+import { getKycStatus, submitVerification } from "#srv/kyc/service";
+import { rateLimit } from "#srv/rate-limit";
+
+/** GET /api/kyc — estado de la verificación de identidad del usuario. */
+const GET = handler(async () => {
+  const user = await requireApiUser();
+  return json(await getKycStatus(user.id));
+});
+
+/**
+ * POST /api/kyc (multipart/form-data)
+ * fullName, birthDate (AAAA-MM-DD), country (ISO-2), documentType,
+ * documentNumber, front, back (no requerido con pasaporte), selfie.
+ */
+const POST = handler(async (req) => {
+  const user = await requireApiUser();
+  rateLimit(`kyc:${user.id}`, 5, 24 * 3600 * 1000);
+  if (Number(req.headers.get("content-length") ?? 0) > 20 * 1024 * 1024) {
+    throw new HttpError(413, "photosTooLarge");
+  }
+  const form = await req.formData().catch(() => {
+    throw new HttpError(400, "invalidForm");
+  });
+  await submitVerification(user.id, form);
+  return json(await getKycStatus(user.id), { status: 201 });
+});
+
+export default methods({ GET, POST });

@@ -3,8 +3,8 @@
  * Ejecutar como servicio aparte (systemd / contenedor `worker`) en el VPS.
  */
 import "./_env";
-import { prisma } from "@/lib/prisma";
-import { processNextHlsJob } from "@/server/video-providers/r2-hls-transcoder";
+import { prisma } from "#srv/prisma";
+import { processNextHlsJob } from "#srv/video-providers/r2-hls-transcoder";
 
 const IDLE_MS = 15_000;
 let stopping = false;

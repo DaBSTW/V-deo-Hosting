@@ -4,16 +4,16 @@
   "private": true,
   "description": "Plataforma de Video Hosting & Embedding con proveedor de medios intercambiable.",
   "scripts": {
-    "dev": "next dev",
-    "build": "prisma generate && next build",
-    "start": "next start",
-    "typecheck": "tsc --noEmit",
+    "dev": "nuxt dev",
+    "build": "prisma generate && nuxt build",
+    "start": "node .output/server/index.mjs",
+    "typecheck": "nuxt typecheck",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
-    "worker:hls": "tsx scripts/hls-worker.ts",
-    "cleanup:stale": "tsx scripts/cleanup-stale-uploads.ts",
-    "postinstall": "prisma generate",
-    "kyc:purge": "tsx scripts/purge-kyc-documents.ts"
+    "worker:hls": "tsx --tsconfig scripts/tsconfig.json scripts/hls-worker.ts",
+    "cleanup:stale": "tsx --tsconfig scripts/tsconfig.json scripts/cleanup-stale-uploads.ts",
+    "postinstall": "prisma generate && nuxt prepare",
+    "kyc:purge": "tsx --tsconfig scripts/tsconfig.json scripts/purge-kyc-documents.ts"
   },
   "engines": {
     "node": ">=20.9.0"
@@ -22,27 +22,31 @@
     "@aws-sdk/client-s3": "^3.1153.0",
     "@aws-sdk/lib-storage": "^3.1153.0",
     "@aws-sdk/s3-request-presigner": "^3.1153.0",
+    "@fontsource-variable/inter": "^5.2.8",
     "@prisma/client": "~6.19.3",
     "bcryptjs": "^3.0.3",
     "hls.js": "^1.7.3",
+    "intl-messageformat": "^10.7.18",
     "jose": "^6.2.12",
-    "next": "~15.5.28",
-    "next-intl": "^4.14.9",
+    "lucide-vue-next": "^1.0.0",
+    "nuxt": "^4.5.2",
     "plyr": "^3.8.5",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1",
     "tus-js-client": "^4.3.1",
+    "vue": "3.5.44",
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.3.3",
+    "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^22.20.5",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
     "postcss": "^8.5.31",
     "prisma": "~6.19.3",
+    "sass": "1.93",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.15",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vue-tsc": "^3.3.13"
+  },
+  "overrides": {
+    "vue": "$vue"
   }
 }

@@ -1,0 +1,186 @@
+@import "@fontsource-variable/inter";
+@import "tailwindcss";
+
+/*
+ * Sistema de diseño inspirado en Modrinth: tipografía Inter, superficies
+ * escalonadas, verde de marca y radios generosos. Tema oscuro por defecto y
+ * tema claro con `data-theme="light"` en <html>.
+ */
+@custom-variant light (&:where([data-theme="light"], [data-theme="light"] *));
+
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-1: #16181c;
+  --surface-1-5: #1a1c20;
+  --surface-2: #1d1f23;
+  --surface-3: #27292e;
+  --surface-4: #34363c;
+  --surface-5: #42444a;
+
+  --text-contrast: #ffffff;
+  --text-primary: #b0bac5;
+  --text-secondary: #96a2b0;
+
+  --brand: #1bd96a;
+  --brand-highlight: rgba(27, 217, 106, 0.25);
+  --brand-soft: rgba(27, 217, 106, 0.12);
+  --on-brand: #000000;
+
+  --red: #ff496e;
+  --red-soft: rgba(255, 73, 110, 0.15);
+  --orange: #ffa347;
+  --orange-soft: rgba(255, 163, 71, 0.15);
+  --blue: #4f9cff;
+  --blue-soft: rgba(79, 156, 255, 0.15);
+  --purple: #c78aff;
+  --purple-soft: rgba(199, 138, 255, 0.15);
+
+  --button-bg: #34363c;
+  --button-border: rgba(193, 190, 209, 0.12);
+  --divider: #34363c;
+  --scrollbar: #42444a;
+
+  --card-shadow: rgba(0, 0, 0, 0.25) 0 2px 4px 0;
+  --floating-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.5), 0 2px 6px -2px rgba(0, 0, 0, 0.35);
+  --shadow-inset-sm: inset 0 -1px 1px rgba(17, 24, 39, 0.25);
+  --hover-brightness: 1.25;
+  --hero-glow: rgba(27, 217, 106, 0.16);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --surface-1: #ebebeb;
+  --surface-1-5: #ededed;
+  --surface-2: #f5f5f5;
+  --surface-3: #f8f8f8;
+  --surface-4: #ffffff;
+  --surface-5: #dddddd;
+
+  --text-contrast: #1a202c;
+  --text-primary: #2c2e31;
+  --text-secondary: #484d54;
+
+  --brand: #00af5c;
+  --brand-highlight: rgba(0, 175, 92, 0.25);
+  --brand-soft: rgba(0, 175, 92, 0.1);
+  --on-brand: #ffffff;
+
+  --red: #cb2245;
+  --red-soft: rgba(203, 34, 69, 0.1);
+  --orange: #c66019;
+  --orange-soft: rgba(224, 131, 37, 0.12);
+  --blue: #1f68c0;
+  --blue-soft: rgba(31, 104, 192, 0.1);
+  --purple: #8e32f3;
+  --purple-soft: rgba(142, 50, 243, 0.1);
+
+  --button-bg: #ffffff;
+  --button-border: rgba(161, 161, 161, 0.35);
+  --divider: #dddddd;
+  --scrollbar: #96a2b0;
+
+  --card-shadow: rgba(50, 50, 100, 0.1) 0 2px 4px 0;
+  --floating-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.15), 0 2px 6px -2px rgba(0, 0, 0, 0.1);
+  --shadow-inset-sm: inset 0 -1px 2px rgba(225, 231, 241, 0.15);
+  --hover-brightness: 0.92;
+  --hero-glow: rgba(0, 175, 92, 0.12);
+}
+
+@theme inline {
+  --font-sans: "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --color-bg: var(--surface-1);
+  --color-bg-soft: var(--surface-1-5);
+  --color-surface: var(--surface-2);
+  --color-raised: var(--surface-3);
+  --color-raised-2: var(--surface-4);
+  --color-raised-3: var(--surface-5);
+  --color-button: var(--button-bg);
+  --color-divider: var(--divider);
+
+  --color-contrast: var(--text-contrast);
+  --color-primary: var(--text-primary);
+  --color-secondary: var(--text-secondary);
+
+  --color-brand: var(--brand);
+  --color-brand-highlight: var(--brand-highlight);
+  --color-brand-soft: var(--brand-soft);
+  --color-on-brand: var(--on-brand);
+
+  --color-red: var(--red);
+  --color-red-soft: var(--red-soft);
+  --color-orange: var(--orange);
+  --color-orange-soft: var(--orange-soft);
+  --color-blue: var(--blue);
+  --color-blue-soft: var(--blue-soft);
+  --color-purple: var(--purple);
+  --color-purple-soft: var(--purple-soft);
+
+  --shadow-card: var(--card-shadow);
+  --shadow-floating: var(--floating-shadow);
+}
+
+@layer base {
+  html {
+    background: var(--surface-1);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scrollbar-color: var(--scrollbar) transparent;
+  }
+  body {
+    min-height: 100vh;
+    background: var(--surface-1);
+  }
+  ::selection {
+    background: var(--brand-highlight);
+  }
+  :focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
+  button,
+  [role="button"] {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+}
+
+@layer components {
+  /* Tarjeta base (superficie elevada, radio 1rem). */
+  .card {
+    @apply rounded-2xl bg-raised p-5 shadow-card;
+  }
+  /* Campo de texto. */
+  .input {
+    @apply w-full rounded-xl border border-transparent bg-button px-3 py-2 text-sm text-contrast placeholder:text-secondary outline-none transition;
+    box-shadow: var(--shadow-inset-sm);
+  }
+  .input:focus {
+    @apply border-brand;
+    box-shadow: 0 0 0 3px var(--brand-highlight);
+  }
+  .label {
+    @apply mb-1.5 block text-sm font-semibold text-contrast;
+  }
+  .kbd {
+    @apply rounded-md bg-button px-1.5 py-0.5 font-mono text-[11px] text-secondary;
+  }
+}
+
+@layer utilities {
+  .hover-bright {
+    transition: filter 0.15s ease, transform 0.1s ease;
+  }
+  .hover-bright:hover:not(:disabled) {
+    filter: brightness(var(--hover-brightness));
+  }
+  .press:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+}

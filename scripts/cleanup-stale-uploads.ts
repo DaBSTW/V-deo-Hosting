@@ -3,9 +3,9 @@
  * Uso: `npm run cleanup:stale` — p. ej. con un cron diario en el VPS.
  */
 import "./_env";
-import type { ProviderMeta } from "@/server/video-providers/types";
-import { prisma } from "@/lib/prisma";
-import { getAdapter } from "@/server/video-providers/factory";
+import type { ProviderMeta } from "#srv/video-providers/types";
+import { prisma } from "#srv/prisma";
+import { getAdapter } from "#srv/video-providers/factory";
 
 const MAX_AGE_H = Number(process.env.STALE_UPLOAD_HOURS ?? 24);
 

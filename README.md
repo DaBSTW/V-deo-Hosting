@@ -4,7 +4,9 @@ Plataforma tipo Fembed / Streamtape pensada para un VPS propio con Cloudflare co
 El proveedor (**Cloudflare R2** o **Cloudflare Stream**) se elige con una variable de entorno y queda
 oculto para el usuario: el dashboard, los embeds y la API solo usan identificadores propios (`v_XXXXXXXXXXXX`).
 
-**Stack:** Next.js 15 (App Router, TypeScript) · PostgreSQL + Prisma · Tailwind CSS v4 · Plyr + hls.js · AWS S3 SDK v3 · tus-js-client.
+**Stack:** Nuxt 4 (Vue 3 + TypeScript, servidor Nitro) · PostgreSQL + Prisma · Tailwind CSS v4 · Inter · Lucide · Plyr + hls.js · AWS S3 SDK v3 · tus-js-client.
+
+La interfaz usa el mismo lenguaje que el frontend de Modrinth (Vue/Nuxt + TypeScript) y un diseño inspirado en su estilo; ver [Diseño](#diseño).
 
 ---
 
@@ -18,7 +20,7 @@ oculto para el usuario: el dashboard, los embeds y la API solo usan identificado
      1. ticket de  │   2. subida   │ 3. confirmar  │ 302 → URL firmada
         subida     │   DIRECTA     │               │ (/media/v_xxx/...)
                    ▼               ▼               │
-   ┌──────────── VPS (Next.js) ──────────────┐     │
+   ┌──────────── VPS (Nuxt/Nitro) ───────────┐     │
    │ API REST ─► VideoService ─► Factory ────┼─────┘
    │                 │            │          │
    │             PostgreSQL   ┌───┴────────┐ │       ┌──────────────────┐
@@ -31,13 +33,13 @@ oculto para el usuario: el dashboard, los embeds y la API solo usan identificado
 
 * **El video nunca pasa por el VPS:** el navegador sube directamente al proveedor con una URL
   prefirmada (R2) o una sesión TUS reanudable (Stream), y reproduce directamente desde el CDN.
-* **Patrón Strategy / Adapter:** `VideoProviderAdapter` (`src/server/video-providers/types.ts`) es
-  la única puerta al almacenamiento. Nada fuera de `src/server/video-providers/` sabe qué es R2 o Stream.
+* **Patrón Strategy / Adapter:** `VideoProviderAdapter` (`server/lib/video-providers/types.ts`) es
+  la única puerta al almacenamiento. Nada fuera de `server/lib/video-providers/` sabe qué es R2 o Stream.
 * **Proveedor por video:** cada fila de `Video` guarda (en privado) `provider` y `providerVideoId`.
   `VIDEO_PROVIDER` decide dónde van las subidas **nuevas**; los videos existentes siguen funcionando
   con el adaptador con el que se subieron. Puedes cambiar de proveedor sin migrar nada.
 * **Opacidad total:**
-  * El DTO público (`src/server/videos/dto.ts`) copia solo campos de una lista blanca.
+  * El DTO público (`server/lib/videos/dto.ts`) copia solo campos de una lista blanca.
   * El HTML del embed solo contiene rutas propias firmadas y con caducidad
     (`/media/v_xxx/source?e=…&s=…`). Esa ruta valida la firma y responde con un `302` a la URL real
     recién firmada. Los bytes de video no pasan por el VPS.
@@ -48,23 +50,26 @@ oculto para el usuario: el dashboard, los embeds y la API solo usan identificado
 
 ```
 prisma/schema.prisma                     Modelos User / Video (+ migración inicial)
-src/server/video-providers/
+server/lib/video-providers/
   types.ts                               ⭐ Interfaz VideoProviderAdapter + tipos agnósticos
   CloudflareR2Adapter.ts                 R2: URLs prefirmadas (S3 SDK), MP4 progresivo / HLS
   CloudflareStreamAdapter.ts             Stream: TUS, webhooks firmados, tokens de reproducción
   factory.ts                             ⭐ Fábrica: VIDEO_PROVIDER → adaptador
   r2-hls-transcoder.ts                   (opcional) ffmpeg → HLS multi-calidad para R2
-src/server/videos/
+server/lib/videos/
   service.ts                             Lógica de negocio (DB + adaptador)
   dto.ts                                 ⭐ Frontera de opacidad (DTO público)
   playback-token.ts                      Enlaces /media firmados con caducidad
-src/app/api/…                            Endpoints REST
-src/app/embed/[publicId]                 Reproductor para iframes
-src/app/v/[publicId]                     Enlace directo para compartir
-src/app/media/[publicId]/[asset]         Pasarela opaca (302 a la URL firmada)
-src/app/dashboard                        Panel de usuario
-src/components/…                         UI (Tailwind): subida, tabla, reproductor
-src/lib/upload-client.ts                 Cliente de subida agnóstico (PUT o TUS)
+server/lib/http.ts                       route()/methods(): errores traducidos, CSRF, Request/Response estándar
+server/api/…                             Endpoints REST (mismas rutas y contratos)
+server/routes/media/[publicId]/[asset]   Pasarela opaca (302 a la URL firmada)
+server/middleware/security.ts            Cabeceras de seguridad y protección de /dashboard
+server/plugins/ad-slot.ts                Código de anuncios solo en el HTML de /v y /embed
+app/pages/                               Páginas Vue: portada, acceso, panel, /v, /embed, legales
+app/components/ui · site · dash · …      Sistema de diseño, cabecera/footer, panel, reproductor
+app/composables/                         i18n, sesión, tema, API, estado del panel, subidas
+app/lib/upload-client.ts                 Cliente de subida agnóstico (PUT, partes o TUS)
+shared/                                  i18n (mensajes ICU), formatos, textos legales
 scripts/                                 Worker HLS, limpieza, registro del webhook de Stream
 workers/r2-event-forwarder               (opcional) Worker: eventos R2 → webhook
 ```
@@ -78,6 +83,11 @@ workers/r2-event-forwarder               (opcional) Worker: eventos R2 → webho
 | `POST`   | `/api/auth/register`         | `{ email, password, name? }` → cookie de sesión (JWT httpOnly) |
 | `POST`   | `/api/auth/login`            | `{ email, password }` → cookie de sesión |
 | `POST`   | `/api/auth/logout`           | Cierra la sesión |
+| `GET`    | `/api/auth/me`               | Usuario de la sesión (o `null`) para la interfaz |
+| `GET`    | `/api/dashboard`             | Datos iniciales del panel (videos, carpetas, estadísticas, límite) |
+| `GET`    | `/api/public/home`           | Datos públicos de la portada (tarifas si la monetización está activa, límites) |
+| `GET`    | `/api/public/videos/:publicId` | Reproducción para `/v` y `/embed` (solo rutas `/media` propias) |
+| `GET`    | `/api/public/legal/:slug`    | Documento legal en el idioma del visitante (`?locale=` opcional) |
 | `GET`    | `/api/videos`                | Lista de videos del usuario (DTO público) |
 | `POST`   | `/api/videos/upload-url`     | `{ title, fileName, sizeBytes, mimeType, folderId? }` → `{ videoId, upload, thumbnailUpload? }` |
 | `POST`   | `/api/videos/upload-parts`   | `{ videoId, parts[] }` → `{ urls }`: URLs firmadas para las partes de una subida grande (máx. 50 por llamada) |
@@ -117,26 +127,29 @@ workers/r2-event-forwarder               (opcional) Worker: eventos R2 → webho
 
 ## Idiomas (i18n)
 
-La plataforma completa está en **español e inglés** con [`next-intl`](https://next-intl.dev):
+La plataforma completa está en **español e inglés** con un traductor ICU propio sobre
+[`intl-messageformat`](https://formatjs.github.io/docs/intl-messageformat/) (`shared/i18n/translator.ts`),
+el mismo para el servidor y la interfaz:
 
 * **Detección automática:** se usa la cookie `NEXT_LOCALE` si el usuario eligió idioma; si no, la cabecera
   `Accept-Language` del navegador (respetando sus pesos `q=`). Si el navegador no pide español ni inglés,
   se muestra en **inglés**.
-* **Selector de idioma** en el footer (guarda la cookie y recarga los datos sin cambiar de página).
+* **Selector de idioma** en el footer: cambia el idioma al instante, sin recargar, y guarda la cookie.
 * **Las URLs no llevan idioma**: los enlaces `/v/…` y `/embed/…` ya compartidos funcionan igual en ambos.
-* **Mensajes** en `src/i18n/messages/es.ts` (referencia) y `en.ts`. Las claves están **tipadas**: una clave
+* **Mensajes** en `shared/i18n/messages/es.ts` (referencia) y `en.ts`. Las claves están **tipadas**: una clave
   inexistente o una traducción que falta no compila.
 * **Errores de la API:** el servidor responde con el mensaje en el idioma de la petición (`HttpError` usa claves
   de `errors.*`), además de un `code` estable para integraciones.
-* **Formatos** de números, fechas y moneda según el idioma (`useFormat()` en cliente, `makeFormatters()` en servidor).
+* **Formatos** de números, fechas y moneda según el idioma (`useFormat()` en la interfaz, `makeFormatters()` en el servidor).
+* **Texto enriquecido** (enlaces o negritas dentro de una frase) con `<IntlText k="…">` y un slot por etiqueta.
 * El reproductor (controles de Plyr), la página pública, el embed y la página «Preparando descarga» también se traducen.
 
-Para añadir un idioma: crea `src/i18n/messages/<código>.ts` tipado como `Messages`, añádelo a `LOCALES` en
-`src/i18n/config.ts` y a `messagesFor()`. Si quieres versiones de las páginas legales en ese idioma, añade también su archivo en `src/content/legal/`.
+Para añadir un idioma: crea `shared/i18n/messages/<código>.ts` tipado como `Messages`, añádelo a `LOCALES` en
+`shared/i18n/config.ts` y a `messagesFor()`. Si quieres versiones de las páginas legales en ese idioma, añade también su archivo en `shared/content/legal/`.
 
 ## Landing page (`/`)
 
-Portada de presentación en `src/app/page.tsx` (ilustración del hero en `src/components/home/HeroMockup.tsx`, HTML/CSS
+Portada de presentación en `app/pages/index.vue` (ilustración del hero en `app/components/home/Showcase.vue`, HTML/CSS
 sin imágenes). Secciones: hero, funciones, cómo funciona, código de inserción, monetización, preguntas frecuentes y
 llamada final. Todo el texto está en el bloque `landing` de los mensajes (es/en).
 
@@ -158,7 +171,7 @@ En `/legal/<página>`, enlazadas desde el footer de todas las páginas (portada,
 | Uso aceptable | `/legal/acceptable-use` |
 | Términos del programa de monetización | `/legal/monetization` |
 
-* Textos en `src/content/legal/es.ts` y `en.ts`, adaptados a esta plataforma: alojamiento de video, anuncios de
+* Textos en `shared/content/legal/es.ts` y `en.ts`, adaptados a esta plataforma: alojamiento de video, anuncios de
   Monetag, pagos con mínimo de 25 USD, verificación de identidad cifrada con retención limitada, cookies reales
   (`vh_session`, `NEXT_LOCALE`) y política de infractores reincidentes.
 * Los datos del operador se toman de `LEGAL_ENTITY_NAME`, `LEGAL_CONTACT_EMAIL`, `LEGAL_DMCA_EMAIL`, `LEGAL_ADDRESS`,
@@ -168,6 +181,21 @@ En `/legal/<página>`, enlazadas desde el footer de todas las páginas (portada,
 * **Importante:** son una base de partida, no asesoramiento legal. Haz que un abogado de tu jurisdicción los revise,
   sobre todo la ley aplicable, los plazos de conservación fiscal y la política de contenido adulto (prohibido por defecto).
   Si tienes tráfico de la UE, añade un gestor de consentimiento (CMP) para las cookies publicitarias.
+
+## Diseño
+
+Inspirado en el estilo de [Modrinth](https://github.com/modrinth/code) sin copiar su código ni su marca
+(su UI es GPL-3 y su logotipo está protegido): los componentes están escritos desde cero para una plataforma de video.
+
+* **Tipografía Inter** (autoalojada con `@fontsource-variable/inter`, sin CDN) y titulares en peso extra-bold.
+* **Paleta**: verde de marca `#1bd96a` (oscuro) / `#00af5c` (claro) y superficies escalonadas
+  (`#16181c` → `#27292e` → `#34363c`). Tokens en `app/assets/styles/main.css`, expuestos a Tailwind
+  (`bg-raised`, `text-contrast`, `text-secondary`, `bg-brand-highlight`…).
+* **Tema oscuro por defecto** y tema claro con el botón sol/luna (cookie `theme`, sin parpadeo al cargar).
+* Cabecera con navegación en «píldoras», tarjetas con radio de 1 rem, botones con brillo al pasar el
+  cursor y leve escala al pulsar, panel con barra lateral, barra flotante para la selección múltiple.
+* Componentes base en `app/components/ui/` (`UiButton`, `UiModal`, `UiMenu`, `UiToggle`, `UiSegmented`,
+  `UiBadge`, `UiCopyField`…), iconos de [Lucide](https://lucide.dev).
 
 ## Dashboard
 
@@ -304,7 +332,7 @@ El VPS **no descarga ni decodifica videos** para generar miniaturas. Según el p
 
 | Fuente | Cuándo | Coste en el VPS |
 |---|---|---|
-| **Navegador del usuario** (R2) | Antes de subir, `src/lib/media-probe.ts` abre el archivo **local** en un `<video>` oculto, salta al ~10 % (máx. 3 s, para evitar negros iniciales), dibuja el fotograma en un `<canvas>` y lo exporta a JPEG de 640 px (unos 30-80 KB). El backend devuelve una segunda URL prefirmada (`thumbnailUpload`) y el navegador sube la miniatura **directamente a R2**, en paralelo con el video. | Cero: solo firma una URL y hace un `HEAD` para validar (≤ 2 MB, `image/jpeg`) |
+| **Navegador del usuario** (R2) | Antes de subir, `app/lib/media-probe.ts` abre el archivo **local** en un `<video>` oculto, salta al ~10 % (máx. 3 s, para evitar negros iniciales), dibuja el fotograma en un `<canvas>` y lo exporta a JPEG de 640 px (unos 30-80 KB). El backend devuelve una segunda URL prefirmada (`thumbnailUpload`) y el navegador sube la miniatura **directamente a R2**, en paralelo con el video. | Cero: solo firma una URL y hace un `HEAD` para validar (≤ 2 MB, `image/jpeg`) |
 | **Cloudflare Stream** | Stream genera las miniaturas en su CDN al transcodificar. | Cero |
 | **Media Transformations** (R2, opcional) | Respaldo para archivos que el navegador no sabe decodificar (algunos MKV/HEVC): con `R2_MEDIA_TRANSFORMATIONS=true`, Cloudflare extrae un fotograma **en el edge** (`/cdn-cgi/media/mode=frame,…`) y lo cachea. Tiene límites de tamaño y duración del archivo de entrada; consulta la documentación vigente. | Cero |
 | **Worker HLS** (R2, opcional) | Si ya ejecutas el worker de HLS, aprovecha la pasada de ffmpeg y regenera `poster.jpg` sin coste adicional. | El del propio worker |
@@ -321,8 +349,11 @@ miniatura, la tarjeta muestra un marcador neutro.
 cp .env.example .env            # rellena DATABASE_URL, JWT_SECRET y el proveedor elegido
 npm install
 npx prisma migrate deploy       # crea las tablas
-npm run dev                     # http://localhost:3000
+npm run dev                     # http://localhost:3000 (recarga en caliente)
 ```
+
+En producción: `npm run build` y `node --env-file=.env .output/server/index.mjs` (o Docker, abajo).
+`npm run typecheck` comprueba los tipos de Vue y del servidor, incluidas las claves de traducción.
 
 ---
 
@@ -371,7 +402,7 @@ npm run dev                     # http://localhost:3000
    # → result.id  → CF_STREAM_SIGNING_KEY_ID
    # → result.jwk → CF_STREAM_SIGNING_KEY_JWK
    ```
-4. **Webhook:** con `APP_URL` ya público, ejecuta `npx tsx scripts/register-stream-webhook.ts` y copia
+4. **Webhook:** con `APP_URL` ya público, ejecuta `npx tsx --tsconfig scripts/tsconfig.json scripts/register-stream-webhook.ts` y copia
    el secreto en `CF_STREAM_WEBHOOK_SECRET`. Si los webhooks no llegan (p. ej. en local), el dashboard
    consulta a la API el estado de los videos que llevan más de 20 s en «Procesando».
 
@@ -411,7 +442,7 @@ No hace falta subir `client_max_body_size` ni límites parecidos, porque las sub
 Tareas periódicas recomendadas (cron):
 
 ```cron
-0 4 * * *  cd /srv/vidhost && docker compose run --rm hls-worker npx tsx scripts/cleanup-stale-uploads.ts
+0 4 * * *  cd /srv/vidhost && docker compose run --rm hls-worker npx tsx --tsconfig scripts/tsconfig.json scripts/cleanup-stale-uploads.ts
 ```
 
 ---
