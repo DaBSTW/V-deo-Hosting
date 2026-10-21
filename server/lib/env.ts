@@ -124,8 +124,11 @@ const r2Schema = z
      * ocupa espacio extra en R2.
      */
     R2_HLS_DOWNLOAD_RENDITIONS: bool(true),
-    /** A partir de este tamaño (MB) la subida va por partes en paralelo (un PUT único admite ~5 GB). */
-    R2_MULTIPART_THRESHOLD_MB: z.coerce.number().int().min(5).max(5000).default(1024),
+    /**
+     * Solo los archivos que SUPERAN este tamaño (MB) se suben por partes; los demás van
+     * enteros en un único PUT (que admite hasta ~5 GB). Por defecto, 4 GB.
+     */
+    R2_MULTIPART_THRESHOLD_MB: z.coerce.number().int().min(5).max(5000).default(4096),
     /** Tamaño de cada parte (MB). Crece solo si el archivo necesitara más de 10 000 partes. */
     R2_MULTIPART_PART_MB: z.coerce.number().int().min(5).max(5000).default(64),
     /** Secreto HMAC del Worker que reenvía las notificaciones de eventos R2. */

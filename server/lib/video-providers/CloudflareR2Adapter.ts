@@ -2,7 +2,7 @@
  * Adaptador Cloudflare R2 (API compatible con S3).
  *
  *  - Subida: URL prefirmada `PUT` → el navegador sube directo al bucket. Los
- *    archivos grandes (≥ R2_MULTIPART_THRESHOLD_MB) van por partes (multipart):
+ *    archivos de más de R2_MULTIPART_THRESHOLD_MB (4 GB) van por partes (multipart):
  *    el navegador sube varias partes en paralelo con URLs firmadas que pide por
  *    lotes, y al confirmar el backend lista las partes y completa el objeto.
  *  - Reproducción:
@@ -145,7 +145,8 @@ export class CloudflareR2Adapter implements VideoProviderAdapter {
       maxBytes: THUMBNAIL_MAX_BYTES,
     };
 
-    if (req.sizeBytes >= this.env.R2_MULTIPART_THRESHOLD_MB * MiB) {
+    // Hasta el umbral (incluido) el archivo se sube entero; solo lo que lo supera va por partes.
+    if (req.sizeBytes > this.env.R2_MULTIPART_THRESHOLD_MB * MiB) {
       const partSizeBytes = this.partSizeFor(req.sizeBytes);
       const { UploadId } = await this.wrap("create multipart upload", () =>
         this.s3.send(

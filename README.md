@@ -382,11 +382,14 @@ En producción: `npm run build` y `node --env-file=.env .output/server/index.mjs
    caché de Cloudflare. Las claves de objeto son aleatorias (24 caracteres) y no se pueden adivinar.
    Para limitar el hotlinking, puedes añadir una regla WAF de *Hotlink Protection* o de token.
    Sin dominio propio se usan URLs `GET` prefirmadas (`PLAYBACK_URL_TTL_SEC`).
-4. **(Opcional) HLS multi-calidad:** `R2_HLS_ENABLED=true` (requiere el punto 3) y ejecuta el worker:
+4. **(Opcional, desactivado por defecto) HLS multi-calidad:** de serie no se transcodifica nada (cero CPU en
+   el VPS) y cada video se sirve tal cual se subió. Para activarlo, `R2_HLS_ENABLED=true` (requiere el punto 3) y ejecuta el worker:
    `npm run worker:hls` (o `docker compose --profile hls up -d`). El video se puede ver **al instante**
    en MP4 progresivo. Cuando el worker termina (1080/720/480/360p según el original, más la miniatura),
    el reproductor pasa a HLS con selector de calidad. Si el worker falla, el video sigue en MP4.
    Para que el MP4 empiece a reproducirse rápido, conviene que los archivos lleven `faststart`.
+   Si el worker se arranca sin `R2_HLS_ENABLED=true`, se cierra solo sin procesar nada. Al activarlo más
+   adelante solo se procesan los videos subidos desde entonces.
 5. **(Opcional) Eventos R2:** despliega `workers/r2-event-forwarder` (ver su README) y define
    `R2_WEBHOOK_SECRET`. Así un video se activa aunque el usuario cierre el navegador justo al terminar la subida.
 
@@ -425,7 +428,7 @@ el suyo, así que conserva las credenciales del proveedor anterior mientras teng
 cp .env.example .env    # APP_URL=https://videos.example.com, secretos, proveedor…
 echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)" >> .env
 docker compose up -d --build                 # web + postgres (aplica migraciones al arrancar)
-docker compose --profile hls up -d           # + worker HLS (solo R2 con R2_HLS_ENABLED)
+docker compose --profile hls up -d           # OPCIONAL: worker HLS (solo R2 con R2_HLS_ENABLED=true)
 ```
 
 Pon delante un reverse proxy con TLS. Ejemplo mínimo de Caddy:
@@ -451,8 +454,8 @@ Tareas periódicas recomendadas (cron):
 
 El límite por archivo es `MAX_UPLOAD_MB` (por defecto 20480 = 20 GB). El archivo **nunca pasa por el VPS**:
 
-* **R2**: un PUT único admite ~5 GB, así que a partir de `R2_MULTIPART_THRESHOLD_MB` (1 GB) la subida va
-  **por partes** (`protocol: "multipart"`). El navegador sube 4 partes en paralelo (64 MB cada una por
+* **R2**: los archivos de hasta 4 GB se suben **enteros** en una sola petición (un PUT único admite ~5 GB).
+  Solo los de **más** de `R2_MULTIPART_THRESHOLD_MB` (4096 MB = 4 GB) van **por partes** (`protocol: "multipart"`). El navegador sube 4 partes en paralelo (64 MB cada una por
   defecto, `R2_MULTIPART_PART_MB`), con reintentos por parte y sin cargar el archivo en memoria. Las URLs de
   cada parte se piden por lotes a `/api/videos/upload-parts` justo antes de usarlas, así no caducan aunque la
   subida dure horas. Al confirmar, el backend lista las partes en R2, comprueba tamaños y completa el objeto
