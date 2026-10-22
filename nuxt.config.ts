@@ -19,7 +19,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       /** Nombre comercial visible (NUXT_PUBLIC_APP_NAME). */
-      appName: process.env.NUXT_PUBLIC_APP_NAME || process.env.NEXT_PUBLIC_APP_NAME || "VidHost",
+      appName: process.env.NUXT_PUBLIC_APP_NAME || process.env.NEXT_PUBLIC_APP_NAME || "Dembed",
     },
   },
   app: {

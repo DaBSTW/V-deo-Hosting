@@ -5,9 +5,9 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: vidhost
+      POSTGRES_USER: dembed
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
-      POSTGRES_DB: vidhost
+      POSTGRES_DB: dembed
     volumes:
       - pgdata:/var/lib/postgresql/data
     # Ajustes para una VPS pequeña (2 GB de RAM): PostgreSQL se mantiene por debajo de ~400 MB.
@@ -26,7 +26,7 @@ services:
       - max_connections=30            # la web usa un pool pequeño; cada conexión cuesta memoria
     mem_limit: 512m                   # tope duro del contenedor (lo hace cumplir Docker)
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U vidhost"]
+      test: ["CMD-SHELL", "pg_isready -U dembed"]
       interval: 5s
       retries: 10
 
@@ -35,7 +35,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://vidhost:${POSTGRES_PASSWORD:-change-me}@db:5432/vidhost?schema=public
+      DATABASE_URL: postgresql://dembed:${POSTGRES_PASSWORD:-change-me}@db:5432/dembed?schema=public
     volumes:
       # Documentos de identidad (cifrados). Inclúyelo en tus copias de seguridad.
       - kyc:/app/storage/kyc
@@ -50,7 +50,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://vidhost:${POSTGRES_PASSWORD:-change-me}@db:5432/vidhost?schema=public
+      DATABASE_URL: postgresql://dembed:${POSTGRES_PASSWORD:-change-me}@db:5432/dembed?schema=public
     depends_on:
       db: { condition: service_healthy }
     profiles: ["hls"]

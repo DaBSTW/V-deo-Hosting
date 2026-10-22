@@ -12,7 +12,7 @@ FROM deps AS build
 COPY . .
 ENV NUXT_TELEMETRY_DISABLED=1
 # Nombre comercial por defecto (también se puede cambiar en tiempo de ejecución con NUXT_PUBLIC_APP_NAME).
-ARG NUXT_PUBLIC_APP_NAME=VidHost
+ARG NUXT_PUBLIC_APP_NAME=Dembed
 ENV NUXT_PUBLIC_APP_NAME=$NUXT_PUBLIC_APP_NAME
 RUN npm run build
 

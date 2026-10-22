@@ -1,4 +1,4 @@
-# VidHost: plataforma de alojamiento e inserción de video
+# Dembed: plataforma de alojamiento e inserción de video
 
 Plataforma tipo Fembed / Streamtape pensada para un VPS propio con Cloudflare como proveedor de medios.
 El proveedor (**Cloudflare R2** o **Cloudflare Stream**) se elige con una variable de entorno y queda
@@ -450,7 +450,7 @@ No hace falta subir `client_max_body_size` ni límites parecidos, porque las sub
 Tareas periódicas recomendadas (cron):
 
 ```cron
-0 4 * * *  cd /srv/vidhost && docker compose run --rm hls-worker npx tsx --tsconfig scripts/tsconfig.json scripts/cleanup-stale-uploads.ts
+0 4 * * *  cd /srv/dembed && docker compose run --rm hls-worker npx tsx --tsconfig scripts/tsconfig.json scripts/cleanup-stale-uploads.ts
 ```
 
 ---

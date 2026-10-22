@@ -71,7 +71,7 @@ export interface DashboardStore {
 }
 
 /** Tipo MIME propio para arrastrar videos hacia carpetas. */
-export const DRAG_MIME = "application/x-vidhost-videos";
+export const DRAG_MIME = "application/x-dembed-videos";
 
 const KEY: InjectionKey<DashboardStore> = Symbol("dashboard");
 
