@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** /dashboard — panel del usuario (requiere sesión; lo protege el middleware del servidor). */
-import { ChartNoAxesColumn, CircleDollarSign, Folder, Inbox, Library, Menu as MenuIcon, ShieldCheck, Upload, X } from "lucide-vue-next";
+import { ChartNoAxesColumn, CircleDollarSign, Folder, Inbox, Library, ShieldCheck, Upload, X } from "lucide-vue-next";
 import { DRAG_MIME, createDashboard, type DashboardInitial, type PublicVideo } from "~/composables/useDashboard";
 
 const { t } = useI18n();
@@ -73,7 +73,9 @@ function onDrop(e: DragEvent) {
 }
 
 // ------------------------------------------------------------------ cabecera de la sección
-const drawer = ref(false);
+// Barra lateral en móvil: la abre el botón junto al logo de la cabecera.
+const drawer = useState("dash-drawer", () => false);
+onBeforeUnmount(() => (drawer.value = false));
 const currentFolder = computed(() => d.folders.value.find((f) => f.id === currentFolderId.value));
 const isPanel = computed(() => ["overview", "monetization", "admin"].includes(d.filter.value.kind));
 const title = computed(() => (d.filter.value.kind === "folder" ? (currentFolder.value?.name ?? "") : t.dynamic(`dashboard.titles.${d.filter.value.kind}`)));
@@ -100,7 +102,6 @@ const icon = computed(
 
       <div class="min-w-0">
         <div class="mb-5 flex flex-wrap items-center gap-3">
-          <UiButton color="standard" icon-only class="lg:hidden" :aria-label="t('dashboard.menu')" @click="drawer = true"><MenuIcon /></UiButton>
           <span class="hidden h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-raised text-brand shadow-card sm:flex"><component :is="icon" class="h-6 w-6" /></span>
           <div class="min-w-0 flex-1">
             <h1 class="truncate text-2xl font-extrabold text-contrast sm:text-3xl">{{ title }}</h1>
@@ -108,7 +109,7 @@ const icon = computed(
               {{ isPanel ? t.dynamic(`dashboard.subtitles.${d.filter.value.kind}`) : t("dashboard.videoCount", { count: libraryCount }) }}
             </p>
           </div>
-          <UiButton v-if="!isPanel" color="brand" class="lg:hidden" @click="d.openUpload()"><Upload />{{ t("dashboard.upload") }}</UiButton>
+          <UiButton v-if="!isPanel" color="brand" class="lg:!hidden" @click="d.openUpload()"><Upload />{{ t("dashboard.upload") }}</UiButton>
         </div>
 
         <DashMonetizationView v-if="d.filter.value.kind === 'monetization'" />
