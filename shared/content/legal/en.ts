@@ -120,7 +120,7 @@ export function legalDocsEn(o: OperatorInfo): Record<LegalSlug, LegalDoc> {
               list: [
                 "Account data: email, name (optional) and password (stored only as a bcrypt hash, never in plain text). We also store the date you accepted these documents.",
                 "Content: the videos you upload, their titles, thumbnails, folders and technical metadata (duration, size).",
-                "Usage statistics: views and downloads aggregated per video and day, and the viewer’s country (provided by our delivery network) grouped by tier. IP addresses are used only temporarily in memory to prevent double counting and fraud; they are not stored in our database.",
+                "Usage statistics: views and downloads aggregated per video and day, and the viewer’s country (provided by our delivery network). IP addresses are used only temporarily in memory to prevent double counting and fraud; they are not stored in our database.",
                 "Monetization: payout method and destination (for example, PayPal email or wallet address), earnings and payout history.",
                 "Identity verification (only if you request a payout): legal name, date of birth, country, document type and number, photos of the document and a selfie holding it.",
                 "Cookies and local storage: see the Cookie Policy.",
@@ -353,14 +353,16 @@ export function legalDocsEn(o: OperatorInfo): Record<LegalSlug, LegalDoc> {
         {
           title: "2. How earnings are calculated",
           blocks: [
-            "We pay a rate per 1,000 monetized views that depends on the viewer’s country (Tier 1, 2 or 3). Current rates are shown in your dashboard. We may change them at any time, but a change only applies to later views.",
+            `We don’t pay a fixed rate. The program is a revenue share: at the end of each calendar month (UTC) we take the actual RPM our ad network reports for each country (revenue per 1,000 impressions) and credit you ${o.revenueSharePct}% of that value for every 1,000 monetized views your videos received from that country.`,
+            `The total shared with creators in a month never exceeds ${o.revenueSharePct}% of the revenue we actually receive from the ad network for that month; if it would, every credit for that month is reduced by the same proportion. Estimates shown in your dashboard during the month are indicative and not a guaranteed amount.`,
+            "We may change the revenue share percentage with advance notice; the change only applies to months closed afterwards.",
             "A view is monetized when the viewer plays the video for the minimum time shown in your dashboard without an ad blocker. Only one view per person and video every 24 hours counts, there is a daily limit per person, and bots and your own plays are excluded.",
           ],
         },
         {
           title: "3. Invalid traffic",
           blocks: [
-            "We do not pay for artificial or incentivised traffic, or traffic that violates the Acceptable Use Policy. Earnings are held for review during a holding period before they can be cashed out. If we detect invalid traffic, we may deduct the affected earnings, even after they appeared in your dashboard.",
+            "We do not pay for artificial or incentivised traffic, or traffic that violates the Acceptable Use Policy. Each month’s earnings are credited when the month is closed, after reviewing the traffic. If we detect invalid traffic, we may deduct the affected earnings, even after they appeared in your dashboard.",
           ],
         },
         {

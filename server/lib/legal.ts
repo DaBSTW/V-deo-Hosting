@@ -2,13 +2,14 @@ import { getCoreEnv } from "#srv/env";
 import { APP_NAME } from "#shared/lib/brand";
 import type { AppLocale } from "#shared/i18n/config";
 import type { LegalSlug } from "#shared/content/legal/links";
-import { MIN_PAYOUT_USD } from "#srv/monetization/settings";
+import { DEFAULT_SETTINGS, MIN_PAYOUT_USD, getMonetizationSettings } from "#srv/monetization/settings";
 import { legalDocsEn } from "#shared/content/legal/en";
 import { legalDocsEs } from "#shared/content/legal/es";
 import type { LegalDoc, OperatorInfo } from "#shared/content/legal/types";
 
 /** Datos del operador (variables LEGAL_* del .env) que se insertan en los textos. */
-export function operatorInfo(): OperatorInfo {
+export async function operatorInfo(): Promise<OperatorInfo> {
+  const settings = await getMonetizationSettings().catch(() => DEFAULT_SETTINGS);
   const env = getCoreEnv();
   return {
     app: APP_NAME,
@@ -20,10 +21,11 @@ export function operatorInfo(): OperatorInfo {
     jurisdiction: env.LEGAL_JURISDICTION,
     kycRetentionDays: env.KYC_RETENTION_DAYS,
     minPayoutUsd: MIN_PAYOUT_USD,
+    revenueSharePct: settings.revenueSharePct,
   };
 }
 
-export function getLegalDoc(locale: AppLocale, slug: LegalSlug): LegalDoc {
-  const docs = (locale === "es" ? legalDocsEs : legalDocsEn)(operatorInfo());
+export async function getLegalDoc(locale: AppLocale, slug: LegalSlug): Promise<LegalDoc> {
+  const docs = (locale === "es" ? legalDocsEs : legalDocsEn)(await operatorInfo());
   return docs[slug];
 }

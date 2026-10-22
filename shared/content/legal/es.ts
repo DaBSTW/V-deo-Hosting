@@ -122,7 +122,7 @@ export function legalDocsEs(o: OperatorInfo): Record<LegalSlug, LegalDoc> {
               list: [
                 "Datos de cuenta: email, nombre (opcional) y contraseña (guardada solo como hash bcrypt, nunca en texto plano). También guardamos la fecha en que aceptaste estos documentos.",
                 "Contenido: los videos que subes, sus títulos, miniaturas, carpetas y metadatos técnicos (duración, tamaño).",
-                "Estadísticas de uso: reproducciones y descargas agregadas por video y día, y el país del espectador (aportado por nuestra red de distribución) agrupado por nivel. Las direcciones IP se usan solo en memoria, de forma temporal, para evitar el recuento duplicado y el fraude; no se guardan en nuestra base de datos.",
+                "Estadísticas de uso: reproducciones y descargas agregadas por video y día, y el país del espectador (aportado por nuestra red de distribución). Las direcciones IP se usan solo en memoria, de forma temporal, para evitar el recuento duplicado y el fraude; no se guardan en nuestra base de datos.",
                 "Monetización: método y destino de cobro (por ejemplo, email de PayPal o dirección de wallet), historial de ganancias y pagos.",
                 "Verificación de identidad (solo si solicitas un pago): nombre legal, fecha de nacimiento, país, tipo y número de documento, fotos del documento y una selfie con él.",
                 "Cookies y almacenamiento local: ver la Política de cookies.",
@@ -363,14 +363,16 @@ export function legalDocsEs(o: OperatorInfo): Record<LegalSlug, LegalDoc> {
         {
           title: "2. Cómo se calculan las ganancias",
           blocks: [
-            "Pagamos una tarifa por cada 1.000 vistas monetizadas, distinta según el país del espectador (Nivel 1, 2 o 3). Las tarifas vigentes se muestran en tu panel. Podemos cambiarlas en cualquier momento, pero un cambio solo afecta a las vistas posteriores.",
+            `No pagamos una tarifa fija. El programa es un reparto de ingresos: al final de cada mes natural (UTC) tomamos el RPM real que nuestra red publicitaria nos reporta para cada país (los ingresos por cada 1.000 impresiones) y te acreditamos el ${o.revenueSharePct} % de ese valor por cada 1.000 vistas monetizadas que tus videos recibieron desde ese país.`,
+            `El total repartido a los creadores en un mes nunca supera el ${o.revenueSharePct} % de los ingresos que efectivamente recibimos de la red publicitaria por ese mes; si lo superara, todos los créditos del mes se reducen en la misma proporción. Las estimaciones que veas en tu panel durante el mes son orientativas y no son un importe garantizado.`,
+            "Podemos cambiar el porcentaje de reparto avisándote con antelación; el cambio solo se aplica a los meses que se cierren después.",
             "Una vista es monetizada cuando el espectador reproduce el video el tiempo mínimo indicado en tu panel, sin bloqueador de anuncios. Solo cuenta una vista por persona y video cada 24 horas, hay un límite diario por persona, y se excluyen los bots y tus propias reproducciones.",
           ],
         },
         {
           title: "3. Tráfico no válido",
           blocks: [
-            "No pagamos el tráfico generado de forma artificial o incentivada, ni el que incumpla la Política de uso aceptable. Las ganancias quedan en revisión durante un periodo de retención antes de poder cobrarse. Si detectamos tráfico no válido, podemos descontar las ganancias afectadas, incluso después de haberlas mostrado en tu panel.",
+            "No pagamos el tráfico generado de forma artificial o incentivada, ni el que incumpla la Política de uso aceptable. Las ganancias de cada mes se acreditan al cerrarlo, después de revisar el tráfico. Si detectamos tráfico no válido, podemos descontar las ganancias afectadas, incluso después de haberlas mostrado en tu panel.",
           ],
         },
         {

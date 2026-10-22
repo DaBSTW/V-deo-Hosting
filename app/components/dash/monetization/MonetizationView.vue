@@ -1,15 +1,17 @@
 <script setup lang="ts">
-/** Sección «Monetización» del usuario: saldo, ganancias, tarifas, cobro e historial. */
-import { Check, CircleAlert, Clock, Coins, Lock, ShieldCheck, TriangleAlert, Wallet } from "lucide-vue-next";
+/**
+ * Sección «Monetización» del usuario (reparto de ingresos): saldo acreditado,
+ * mes en curso con estimación, ganancias por mes y país, cobro e historial.
+ */
+import { CalendarCheck, CalendarClock, Check, CircleAlert, Clock, HandCoins, Lock, ShieldCheck, TriangleAlert, Wallet } from "lucide-vue-next";
 import type { MonetizationOverview } from "#srv/monetization/earnings";
 
 const d = useDashboard();
 const { confirm } = useDialogs();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const fmt = useFormat();
 
 const data = ref<MonetizationOverview | null>(null);
-const metric = ref<"amount" | "views">("amount");
 const method = ref("");
 const details = ref("");
 const saving = ref(false);
@@ -94,14 +96,27 @@ const reasonText = computed(() => {
 });
 
 const selected = computed(() => data.value?.methods.find((m) => m.id === method.value));
-const totalTierViews = computed(() => data.value?.byTier.reduce((s, x) => s + x.views, 0) ?? 0);
 const paidCount = computed(() => data.value?.payouts.filter((p) => p.status === "PAID").length ?? 0);
-const dailyAmount = computed(() => data.value?.daily.reduce((s, x) => s + x.amountMicros, 0) ?? 0);
 const dailyViews = computed(() => data.value?.daily.reduce((s, x) => s + x.views, 0) ?? 0);
-const metricOptions = computed(() => [
-  { value: "amount" as const, label: t("monetization.earnings") },
-  { value: "views" as const, label: t("monetization.monetizedViews") },
-]);
+const countryViews = computed(() => data.value?.countries.reduce((s, x) => s + x.views, 0) ?? 0);
+const share = computed(() => data.value?.rules.sharePct ?? 30);
+const viewsText = (n: number) => t("monetization.currentViews", { count: n, value: fmt.formatCount(n) });
+
+/** «octubre de 2026» a partir de "2026-10". */
+const monthLabel = (m: string) =>
+  new Intl.DateTimeFormat(locale.value, { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${m}-01T00:00:00Z`));
+const regionNames = computed(() => new Intl.DisplayNames([locale.value], { type: "region" }));
+const countryName = (code: string) => {
+  if (code === "XX") return t("monetization.unknownCountry");
+  try {
+    return regionNames.value.of(code) ?? code;
+  } catch {
+    return code;
+  }
+};
+/** Ejemplo ilustrativo del reparto (RPM real de 1,50 $ en México). */
+const example = computed(() => ({ rpm: fmt.formatUsd(1.5), creator: fmt.formatUsd((1.5 * share.value) / 100) }));
+const MONTH_COLOR = { open: "blue", pending: "orange", credited: "brand" } as const;
 
 // Tarjeta de verificación de identidad
 const kycText = computed(() => {
@@ -137,18 +152,31 @@ const KYC_COLOR = { NONE: "gray", PENDING: "orange", APPROVED: "brand", REJECTED
         </UiButton>
       </DashKpi>
       <DashKpi
-        :icon="Lock"
-        :label="t('monetization.held')"
-        :value="fmt.formatMicros(data.balance.heldMicros)"
-        :hint="t('monetization.heldHint', { days: data.rules.holdDays })"
+        :icon="CalendarClock"
+        :label="t('monetization.currentMonth')"
+        :value="data.current.estimateMicros != null ? `≈ ${fmt.formatMicros(data.current.estimateMicros)}` : fmt.formatCount(data.current.views)"
+        :hint="
+          data.current.estimateMicros != null && data.current.estimateFrom
+            ? `${viewsText(data.current.views)} · ${t('monetization.estimateHint', { month: monthLabel(data.current.estimateFrom) })}`
+            : `${viewsText(data.current.views)} · ${t('monetization.noEstimate')}`
+        "
       />
       <DashKpi
-        :icon="Coins"
-        :label="t('monetization.month')"
-        :value="fmt.formatMicros(data.balance.monthMicros)"
-        :hint="t('monetization.lifetime', { amount: fmt.formatMicros(data.balance.lifetimeMicros) })"
+        :icon="CalendarCheck"
+        :label="t('monetization.lastClosed')"
+        :value="data.lastClosed ? fmt.formatMicros(data.lastClosed.amountMicros) : '—'"
+        :hint="
+          data.lastClosed
+            ? t('monetization.lastClosedHint', { month: monthLabel(data.lastClosed.month), views: viewsText(data.lastClosed.views) })
+            : t('monetization.noClosed')
+        "
       />
-      <DashKpi :icon="Check" :label="t('monetization.paid')" :value="fmt.formatMicros(data.balance.paidMicros)" :hint="t('monetization.paidCount', { count: paidCount })" />
+      <DashKpi
+        :icon="Check"
+        :label="t('monetization.paid')"
+        :value="fmt.formatMicros(data.balance.paidMicros)"
+        :hint="`${t('monetization.paidCount', { count: paidCount })} · ${t('monetization.credited', { amount: fmt.formatMicros(data.balance.creditedMicros) })}`"
+      />
     </div>
 
     <!-- Interruptor -->
@@ -180,69 +208,91 @@ const KYC_COLOR = { NONE: "gray", PENDING: "orange", APPROVED: "brand", REJECTED
     </DashCard>
     <DashMonetizationKycDialog :open="kycOpen" :first-payout="data.canRequest.needsKyc" @close="kycOpen = false" @submitted="onKycSubmitted" />
 
-    <!-- Gráfica -->
-    <DashCard
-      :title="metric === 'amount' ? t('monetization.earningsPerDay') : t('monetization.viewsPerDay')"
-      :subtitle="
-        t('monetization.last30', {
-          value:
-            metric === 'amount'
-              ? fmt.formatMicros(dailyAmount)
-              : t('monetization.viewsValue', { count: dailyViews, value: fmt.formatCount(dailyViews) }),
-        })
-      "
-    >
-      <template #action>
-        <UiSegmented v-model="metric" :options="metricOptions" :label="t('monetization.metric')" />
-      </template>
-      <DashMonetizationChart
-        v-if="metric === 'amount'"
-        :data="data.daily.map((x) => ({ date: x.date, value: x.amountMicros / 1e6 }))"
-        :label="t('monetization.earningsPerDay')"
-        :format="(n: number) => fmt.formatUsd(n)"
-        :integer="false"
-      />
-      <DashMonetizationChart
-        v-else
-        :data="data.daily.map((x) => ({ date: x.date, value: x.views }))"
-        :unit="t('monetization.viewsUnit')"
-        :label="t('monetization.viewsPerDay')"
-      />
-    </DashCard>
-
+    <!-- Reparto de ingresos + mes en curso por país -->
     <div class="grid grid-cols-1 gap-5 xl:grid-cols-5">
-      <!-- Tarifas -->
-      <DashCard class="xl:col-span-3" :title="t('monetization.ratesTitle')" :subtitle="t('monetization.ratesSubtitle')">
-        <div class="-mx-5 overflow-x-auto px-5">
-          <table class="w-full min-w-[480px] text-sm">
+      <DashCard class="relative overflow-hidden xl:col-span-2">
+        <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(80%_80%_at_100%_0%,var(--hero-glow),transparent)]" />
+        <div class="relative">
+          <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-brand text-on-brand"><HandCoins class="h-5 w-5" /></span>
+          <h2 class="mt-4 text-xl font-extrabold text-contrast">{{ t("monetization.shareTitle", { share }) }}</h2>
+          <p class="mt-2 text-sm leading-relaxed text-primary">{{ t("monetization.shareText", { share }) }}</p>
+          <p class="mt-4 rounded-xl bg-button px-4 py-3 text-sm font-semibold text-contrast">{{ t("monetization.shareExample", example) }}</p>
+        </div>
+      </DashCard>
+
+      <DashCard
+        class="xl:col-span-3"
+        :title="t('monetization.countriesTitle')"
+        :subtitle="data.current.estimateFrom ? t('monetization.countriesSubtitle', { month: monthLabel(data.current.estimateFrom) }) : t('monetization.countriesSubtitleNoRpm')"
+      >
+        <p v-if="data.countries.length === 0" class="py-8 text-center text-sm text-secondary">{{ t("monetization.noMonetizedViews") }}</p>
+        <div v-else class="-mx-5 overflow-x-auto px-5">
+          <table class="w-full min-w-[420px] text-sm">
             <thead class="text-left text-xs font-bold uppercase tracking-wide text-secondary">
               <tr class="border-b border-divider">
-                <th class="py-2 pr-3">{{ t("monetization.table.tier") }}</th>
-                <th class="py-2 pr-3 text-right">{{ t("monetization.table.rate") }}</th>
+                <th class="py-2 pr-3">{{ t("monetization.table.country") }}</th>
                 <th class="py-2 pr-3 text-right">{{ t("monetization.table.views") }}</th>
-                <th class="py-2 pr-3 text-right">{{ t("monetization.table.traffic") }}</th>
-                <th class="py-2 text-right">{{ t("monetization.table.earned") }}</th>
+                <th v-if="data.current.estimateFrom" class="py-2 pr-3 text-right">{{ t("monetization.table.creatorRpm") }}</th>
+                <th v-if="data.current.estimateFrom" class="py-2 text-right">{{ t("monetization.table.estimate") }}</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-divider tabular-nums">
-              <tr v-for="x in data.byTier" :key="x.tier">
-                <td class="py-3 pr-3">
-                  <p class="font-bold text-contrast">{{ t("tiers.label", { n: x.tier.slice(1) }) }}</p>
-                  <p class="max-w-[260px] truncate text-xs text-secondary" :title="x.countries ? x.countries.join(', ') : t('tiers.rest')">
-                    {{ x.countries ? x.countries.join(", ") : t("tiers.rest") }}
-                  </p>
+              <tr v-for="c in data.countries" :key="c.country">
+                <td class="py-2.5 pr-3">
+                  <span class="flex items-center gap-2.5">
+                    <span class="rounded-md bg-button px-1.5 py-0.5 font-mono text-[11px] font-bold text-secondary">{{ c.country }}</span>
+                    <span class="truncate font-semibold text-contrast">{{ countryName(c.country) }}</span>
+                  </span>
+                  <span class="mt-1.5 block h-1 rounded-full bg-button">
+                    <span class="block h-full rounded-full bg-brand" :style="{ width: `${countryViews ? (c.views / countryViews) * 100 : 0}%` }" />
+                  </span>
                 </td>
-                <td class="py-3 pr-3 text-right font-bold text-contrast">{{ fmt.formatUsd(x.rateUsd) }}</td>
-                <td class="py-3 pr-3 text-right text-primary">{{ fmt.formatCount(x.views) }}</td>
-                <td class="py-3 pr-3 text-right text-secondary">{{ totalTierViews ? `${Math.round((x.views / totalTierViews) * 100)} %` : "—" }}</td>
-                <td class="py-3 text-right font-bold text-contrast">{{ fmt.formatMicros(x.amountMicros) }}</td>
+                <td class="py-2.5 pr-3 text-right font-semibold text-primary">{{ fmt.formatCount(c.views) }}</td>
+                <td v-if="data.current.estimateFrom" class="py-2.5 pr-3 text-right text-primary">{{ c.creatorRpmMicros != null ? fmt.formatMicros(c.creatorRpmMicros, true) : "—" }}</td>
+                <td v-if="data.current.estimateFrom" class="py-2.5 text-right font-bold text-contrast">
+                  {{ c.creatorRpmMicros != null ? `≈ ${fmt.formatMicros(Math.floor((c.views * c.creatorRpmMicros) / 1000))}` : "—" }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </DashCard>
+    </div>
+
+    <!-- Vistas monetizadas por día -->
+    <DashCard
+      :title="t('monetization.viewsPerDay')"
+      :subtitle="t('monetization.last30', { value: t('monetization.viewsValue', { count: dailyViews, value: fmt.formatCount(dailyViews) }) })"
+    >
+      <DashMonetizationChart :data="data.daily.map((x) => ({ date: x.date, value: x.views }))" :unit="t('monetization.viewsUnit')" :label="t('monetization.viewsPerDay')" />
+    </DashCard>
+
+    <div class="grid grid-cols-1 gap-5 xl:grid-cols-5">
+      <!-- Ganancias por mes -->
+      <DashCard class="xl:col-span-3" :title="t('monetization.monthsTitle')" :subtitle="t('monetization.monthsSubtitle')">
+        <div class="-mx-5 overflow-x-auto px-5">
+          <table class="w-full min-w-[420px] text-sm">
+            <thead class="text-left text-xs font-bold uppercase tracking-wide text-secondary">
+              <tr class="border-b border-divider">
+                <th class="py-2 pr-3">{{ t("monetization.table.month") }}</th>
+                <th class="py-2 pr-3 text-right">{{ t("monetization.table.views") }}</th>
+                <th class="py-2 pr-3 text-right">{{ t("monetization.table.amount") }}</th>
+                <th class="py-2">{{ t("monetization.table.status") }}</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-divider tabular-nums">
+              <tr v-for="m in data.months" :key="m.month">
+                <td class="py-3 pr-3 font-semibold first-letter:uppercase text-contrast">{{ monthLabel(m.month) }}</td>
+                <td class="py-3 pr-3 text-right text-primary">{{ fmt.formatCount(m.views) }}</td>
+                <td class="py-3 pr-3 text-right font-bold text-contrast">{{ m.amountMicros != null ? fmt.formatMicros(m.amountMicros) : "—" }}</td>
+                <td class="py-3"><UiBadge :color="MONTH_COLOR[m.status]">{{ t(`monetization.monthStatus.${m.status}`) }}</UiBadge></td>
               </tr>
             </tbody>
           </table>
         </div>
       </DashCard>
 
-      <!-- Videos que más generan -->
+      <!-- Videos con más vistas monetizadas -->
       <DashCard class="xl:col-span-2" :title="t('monetization.topVideos')" :subtitle="t('monetization.topVideosSubtitle')">
         <p v-if="data.topVideos.length === 0" class="py-8 text-center text-sm text-secondary">{{ t("monetization.noMonetizedViews") }}</p>
         <ol v-else class="space-y-3.5">
@@ -340,7 +390,7 @@ const KYC_COLOR = { NONE: "gray", PENDING: "orange", APPROVED: "brand", REJECTED
         </li>
         <li class="flex gap-3">
           <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-highlight text-brand"><Lock class="h-4 w-4" /></span>
-          <span class="pt-1.5">{{ t("monetization.rules.hold", { days: data.rules.holdDays }) }}</span>
+          <span class="pt-1.5">{{ t("monetization.rules.settlement") }}</span>
         </li>
       </ul>
     </DashCard>

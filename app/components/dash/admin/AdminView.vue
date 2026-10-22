@@ -1,17 +1,15 @@
 <script setup lang="ts">
-/** Panel de administración: verificaciones, pagos, ajustes de monetización y Monetag. */
+/** Panel de administración: cierre mensual, verificaciones, pagos, ajustes de monetización y Monetag. */
 import { CircleAlert, Coins, Lock, ShieldCheck, TriangleAlert, Wallet, BadgeCheck } from "lucide-vue-next";
 import type { MonetizationSettings, PayoutMethod } from "#srv/monetization/settings";
 
 interface Summary {
   liabilityMicros: number;
-  earnedTodayMicros: number;
-  earnedWeekMicros: number;
-  paidViewsToday: number;
-  paidViewsWeek: number;
+  monthViews: number;
+  todayViews: number;
   pendingPayouts: { count: number; amountMicros: number };
   paidThisMonthMicros: number;
-  topEarners: { email: string; views: number; amountMicros: number }[];
+  topEarners: { email: string; views: number; creditedMicros: number }[];
 }
 interface AdminPayout {
   id: string;
@@ -38,7 +36,6 @@ interface Verification {
 
 const METHODS: PayoutMethod[] = ["PAYPAL", "USDT_TRC20", "PAYONEER", "BANK"];
 const DOC_TYPES = ["ID_CARD", "PASSPORT", "DRIVER_LICENSE"] as const;
-const TIERS = ["T1", "T2", "T3"] as const;
 const ageOf = (iso: string) => {
   const b = new Date(`${iso}T00:00:00Z`);
   const n = new Date();
@@ -192,14 +189,16 @@ const methodCfg = (m: PayoutMethod) => {
       />
       <DashKpi
         :icon="Coins"
-        :label="t('admin.earnedWeek')"
-        :value="fmt.formatMicros(summary.earnedWeekMicros)"
-        :hint="t('admin.earnedWeekHint', { today: fmt.formatMicros(summary.earnedTodayMicros), views: fmt.formatCount(summary.paidViewsWeek) })"
+        :label="t('admin.monthViews')"
+        :value="fmt.formatCount(summary.monthViews)"
+        :hint="t('admin.monthViewsHint', { today: fmt.formatCount(summary.todayViews) })"
       />
       <DashKpi :icon="Lock" :label="t('admin.paidMonth')" :value="fmt.formatMicros(summary.paidThisMonthMicros)" />
     </div>
 
     <!-- Verificaciones de identidad -->
+    <DashAdminSettlement :share="settings.revenueSharePct" @closed="refreshSummary" />
+
     <DashCard :title="t('admin.kycTitle')" :subtitle="t('admin.kycSubtitle')">
       <UiEmptyState v-if="kyc.length === 0" :icon="ShieldCheck" :title="t('admin.kycEmpty')" class="!py-8" />
       <ul v-else class="divide-y divide-divider">
@@ -319,31 +318,27 @@ const methodCfg = (m: PayoutMethod) => {
 
       <div class="mt-5 grid gap-5 lg:grid-cols-2">
         <fieldset class="min-w-0">
-          <legend class="mb-2 text-xs font-bold uppercase tracking-wide text-secondary">{{ t("admin.ratesLegend") }}</legend>
-          <div class="grid grid-cols-3 gap-2">
-            <label v-for="tier in TIERS" :key="tier" class="block min-w-0">
-              <span class="label !text-xs">{{ t("admin.tier", { n: tier.slice(1) }) }}</span>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                :value="settings.rates[tier]"
-                class="input"
-                @input="(settings!.rates[tier] = num(($event.target as HTMLInputElement).value)), touch()"
-              />
-            </label>
-          </div>
+          <legend class="mb-2 text-xs font-bold uppercase tracking-wide text-secondary">{{ t("admin.shareLegend") }}</legend>
+          <label class="block max-w-[200px]">
+            <span class="label !text-xs">{{ t("admin.sharePct") }}</span>
+            <input
+              type="number"
+              step="1"
+              min="1"
+              max="90"
+              :value="settings.revenueSharePct"
+              class="input"
+              @input="(settings!.revenueSharePct = num(($event.target as HTMLInputElement).value)), touch()"
+            />
+          </label>
+          <p class="mt-2 text-xs text-secondary">{{ t("admin.shareHint") }}</p>
         </fieldset>
         <fieldset class="min-w-0">
           <legend class="mb-2 text-xs font-bold uppercase tracking-wide text-secondary">{{ t("admin.antifraudLegend") }}</legend>
-          <div class="grid grid-cols-3 gap-2">
+          <div class="grid grid-cols-2 gap-2">
             <label class="block min-w-0">
               <span class="label !text-xs">{{ t("admin.minSeconds") }}</span>
               <input type="number" min="5" :value="settings.minWatchSeconds" class="input" @input="(settings!.minWatchSeconds = num(($event.target as HTMLInputElement).value)), touch()" />
-            </label>
-            <label class="block min-w-0">
-              <span class="label !text-xs">{{ t("admin.holdDays") }}</span>
-              <input type="number" min="0" :value="settings.holdDays" class="input" @input="(settings!.holdDays = num(($event.target as HTMLInputElement).value)), touch()" />
             </label>
             <label class="block min-w-0">
               <span class="label !text-xs">{{ t("admin.ipCap") }}</span>
@@ -422,7 +417,7 @@ const methodCfg = (m: PayoutMethod) => {
             <tr v-for="x in summary.topEarners" :key="x.email">
               <td class="max-w-[240px] truncate py-2.5 text-contrast">{{ x.email }}</td>
               <td class="py-2.5 text-right text-primary">{{ fmt.formatCount(x.views) }}</td>
-              <td class="py-2.5 text-right font-extrabold text-contrast">{{ fmt.formatMicros(x.amountMicros) }}</td>
+              <td class="py-2.5 text-right font-extrabold text-contrast">{{ fmt.formatMicros(x.creditedMicros) }}</td>
             </tr>
           </tbody>
         </table>

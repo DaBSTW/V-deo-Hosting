@@ -21,7 +21,7 @@ interface HomeData {
   maxUploadBytes: number;
   minPayoutUsd: number;
   minWatchSeconds: number;
-  rates: { T1: number; T2: number; T3: number } | null;
+  revenueSharePct: number | null;
   verificationMeta: { name: string; content: string } | null;
 }
 
@@ -54,7 +54,9 @@ const features = [
   { key: "downloads", icon: Download },
 ] as const;
 
-const tiers = ["T1", "T2", "T3"] as const;
+/** Porcentaje del RPM real para los creadores (30 % por defecto si la monetización está desactivada). */
+const share = computed(() => data.value?.revenueSharePct ?? 30);
+const example = computed(() => ({ rpm: fmt.formatUsd(1.5), creator: fmt.formatUsd((1.5 * share.value) / 100) }));
 const openFaq = ref<number | null>(1);
 
 function faqAnswer(n: number): string {
@@ -161,7 +163,7 @@ function faqAnswer(n: number): string {
       <div class="relative mx-auto grid max-w-[1280px] grid-cols-1 gap-10 overflow-hidden rounded-3xl border border-divider bg-surface p-6 sm:p-10 lg:grid-cols-2">
         <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(50%_70%_at_0%_0%,var(--hero-glow),transparent)]" />
         <div class="relative min-w-0">
-          <HomeSectionHeading :eyebrow="t('landing.monetization.eyebrow')" :title="t('landing.monetization.title')" :subtitle="t('landing.monetization.text')" />
+          <HomeSectionHeading :eyebrow="t('landing.monetization.eyebrow')" :title="t('landing.monetization.title')" :subtitle="t('landing.monetization.text', { share })" />
           <ul class="mt-7 space-y-3">
             <li v-for="(p, i) in ['point1', 'point2', 'point3', 'point4']" :key="p" class="flex items-start gap-3 font-semibold text-contrast">
               <span class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-highlight text-brand"><Check class="h-3.5 w-3.5" /></span>
@@ -175,22 +177,22 @@ function faqAnswer(n: number): string {
           </p>
         </div>
         <div class="relative min-w-0 self-center rounded-2xl bg-raised p-6 shadow-card">
-          <h3 class="font-extrabold text-contrast">{{ t("landing.monetization.ratesTitle") }}</h3>
-          <template v-if="data?.rates">
-            <ul class="mt-4 divide-y divide-divider">
-              <li v-for="(tier, i) in tiers" :key="tier" class="flex items-center justify-between gap-4 py-4">
-                <div class="min-w-0">
-                  <div class="flex items-center gap-2 font-bold text-contrast">
-                    <UiBadge :color="i === 0 ? 'brand' : i === 1 ? 'blue' : 'purple'" :dot="false">{{ t("landing.monetization.tier", { n: i + 1 }) }}</UiBadge>
-                  </div>
-                  <div class="mt-1.5 text-sm text-secondary">{{ t.dynamic(`landing.monetization.tierCountries.${tier}`) }}</div>
-                </div>
-                <div class="shrink-0 text-2xl font-extrabold tabular-nums text-contrast">{{ fmt.formatUsd(data.rates[tier]) }}</div>
-              </li>
-            </ul>
-            <p class="mt-2 text-xs text-secondary">{{ t("landing.monetization.ratesHint") }}</p>
-          </template>
-          <p v-else class="mt-3 text-sm text-secondary">{{ t("landing.monetization.ratesHidden") }}</p>
+          <div class="flex items-center justify-between gap-3">
+            <h3 class="font-extrabold text-contrast">{{ t("landing.monetization.howTitle") }}</h3>
+            <UiBadge color="brand" :dot="false">{{ t("landing.monetization.shareBadge", { share }) }}</UiBadge>
+          </div>
+          <ol class="mt-5 space-y-4">
+            <li v-for="(step, i) in ['step1', 'step2', 'step3']" :key="step" class="flex gap-3.5">
+              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-sm font-extrabold text-on-brand">{{ i + 1 }}</span>
+              <span class="pt-1 text-[15px] font-semibold leading-snug text-contrast">{{ t.dynamic(`landing.monetization.${step}`, { share }) }}</span>
+            </li>
+          </ol>
+          <div class="mt-6 rounded-2xl bg-button p-4">
+            <p class="text-xs font-extrabold uppercase tracking-wide text-secondary">{{ t("landing.monetization.exampleTitle") }}</p>
+            <p class="mt-1.5 font-semibold text-contrast">{{ t("landing.monetization.example", example) }}</p>
+            <p class="mt-2 text-xs text-secondary">{{ t("landing.monetization.exampleNote") }}</p>
+          </div>
+          <p v-if="data && data.revenueSharePct == null" class="mt-3 text-xs text-secondary">{{ t("landing.monetization.hidden") }}</p>
         </div>
       </div>
     </section>

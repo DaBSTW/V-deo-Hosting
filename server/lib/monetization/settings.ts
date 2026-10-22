@@ -5,7 +5,6 @@
  */
 import { z } from "zod";
 import { prisma } from "#srv/prisma";
-import type { Tier } from "./tiers";
 
 /** Métodos de cobro (sus nombres se traducen en la interfaz). */
 export const PAYOUT_METHOD_IDS = ["PAYPAL", "USDT_TRC20", "PAYONEER", "BANK"] as const;
@@ -18,12 +17,14 @@ export const MIN_PAYOUT_USD = 25;
 export const monetizationSettingsSchema = z.object({
   /** Interruptor general: anuncios + ganancias. */
   enabled: z.boolean(),
-  /** USD que se paga por cada 1 000 vistas monetizadas, por nivel de país. */
-  rates: z.object({ T1: z.number().min(0).max(100), T2: z.number().min(0).max(100), T3: z.number().min(0).max(100) }),
+  /**
+   * Reparto de ingresos: porcentaje del RPM real (el que reporta Monetag por
+   * país al final de cada mes) que se acredita a los creadores. Sin tarifas
+   * fijas: si el mercado baja, la plataforma no asume la diferencia.
+   */
+  revenueSharePct: z.number().int().min(1).max(90),
   /** Segundos reproducidos para que una vista cuente (o el 50 % si el video es más corto). */
   minWatchSeconds: z.number().int().min(5).max(600),
-  /** Días que una ganancia queda retenida antes de poder cobrarse (revisión antifraude). */
-  holdDays: z.number().int().min(0).max(90),
   /** Máximo de vistas monetizadas por IP y día (en todos los videos). */
   perIpDailyCap: z.number().int().min(1).max(1000),
   /** Métodos de cobro activos y su mínimo en USD. */
@@ -44,10 +45,8 @@ export const DEFAULT_SETTINGS: MonetizationSettings = {
   // Activa desde la instalación: las cuentas nuevas monetizan sin pasos extra.
   // Mientras no haya código de anuncios, ninguna vista genera ganancias.
   enabled: true,
-  // Valores de partida conservadores: recalcúlalos con tu eCPM real (ver README).
-  rates: { T1: 1.0, T2: 0.4, T3: 0.1 },
+  revenueSharePct: 30,
   minWatchSeconds: 60,
-  holdDays: 7,
   perIpDailyCap: 10,
   payoutMethods: {
     PAYPAL: { enabled: true, minUsd: MIN_PAYOUT_USD },
@@ -102,9 +101,6 @@ export async function saveMonetizationSettings(value: MonetizationSettings): Pro
   g.__monSettings = { value: clean, until: Date.now() + TTL_MS };
   return clean;
 }
-
-/** Tarifa en micro-dólares por UNA vista (rates están en USD por 1 000 vistas). */
-export const microsPerView = (s: MonetizationSettings, tier: Tier) => Math.round(s.rates[tier] * 1000);
 
 /** Extrae name/content de la etiqueta <meta> pegada por el admin. */
 export function parseMetaTag(tag: string): { name: string; content: string } | null {

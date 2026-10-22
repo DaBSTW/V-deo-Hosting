@@ -23,4 +23,6 @@ export interface OperatorInfo {
   jurisdiction: string;
   kycRetentionDays: number;
   minPayoutUsd: number;
+  /** Porcentaje del RPM real que se acredita a los creadores. */
+  revenueSharePct: number;
 }

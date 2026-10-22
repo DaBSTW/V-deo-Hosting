@@ -34,29 +34,30 @@ enum VideoStatus {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  name         String?
+  id              String    @id @default(cuid())
+  email           String    @unique
+  passwordHash    String
+  name            String?
   /// Cuándo aceptó los Términos y la Política de privacidad (al registrarse).
   termsAcceptedAt DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   videos  Video[]
   folders Folder[]
 
   // ---------------- Monetización ----------------
   /// Si es `false`, sus videos no muestran anuncios y no generan ganancias.
-  monetizationEnabled Boolean        @default(true)
+  monetizationEnabled Boolean                @default(true)
   /// Método de cobro elegido (p. ej. PAYPAL, USDT_TRC20, PAYONEER).
   payoutMethod        String?
   /// Destino del cobro (email de PayPal, dirección de wallet…).
   payoutDetails       String?
-  earnings            EarningDaily[]
+  monetizedViews      MonetizedViewDaily[]
+  earningCredits      EarningCredit[]
   payouts             Payout[]
   /// Estado de la verificación de identidad (requisito para cobrar).
-  kycStatus           KycStatus      @default(NONE)
+  kycStatus           KycStatus              @default(NONE)
   verifications       IdentityVerification[]
 }
 
@@ -86,31 +87,31 @@ model Video {
   folderId String?
   folder   Folder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
-  title       String
-  status      VideoStatus @default(PENDING_UPLOAD)
+  title         String
+  status        VideoStatus      @default(PENDING_UPLOAD)
   /// Hay miniatura disponible (la genera el navegador, el proveedor o el worker).
-  hasThumbnail Boolean    @default(false)
+  hasThumbnail  Boolean          @default(false)
   /// El dueño permite descargar el archivo desde la página pública.
-  allowDownload Boolean   @default(true)
-  durationSec Float?
-  sizeBytes   BigInt      @default(0)
-  mimeType    String?
+  allowDownload Boolean          @default(true)
+  durationSec   Float?
+  sizeBytes     BigInt           @default(0)
+  mimeType      String?
   /// Contadores históricos (se acumulan por lotes, ver stats-buffer.ts).
-  views       Int         @default(0)
-  downloads   Int         @default(0)
-  dailyStats  VideoDailyStat[]
+  views         Int              @default(0)
+  downloads     Int              @default(0)
+  dailyStats    VideoDailyStat[]
 
   // ---------------- Campos privados (solo backend) ----------------
-  provider        MediaProvider
+  provider           MediaProvider
   /// R2: object key del archivo original. STREAM: uid del video en Stream.
-  providerVideoId String
+  providerVideoId    String
   /// Metadatos específicos del adaptador (p. ej. `{ "hls": true }` en R2).
-  providerMeta    Json?
+  providerMeta       Json?
   /// Mensaje interno de error (nunca se envía al cliente tal cual).
-  errorReason     String?
+  errorReason        String?
   /// El adaptador pidió post-procesado en segundo plano (p. ej. generar HLS
   /// en R2). El video puede estar READY (reproducción progresiva) mientras tanto.
-  postProcessPending Boolean   @default(false)
+  postProcessPending Boolean       @default(false)
   /// Bloqueo optimista para el worker de post-procesado.
   jobLockedAt        DateTime?
   // ----------------------------------------------------------------
@@ -142,17 +143,58 @@ model VideoDailyStat {
 
 /// Ganancias diarias por usuario y nivel de país. Importes en micro-dólares
 /// (1 USD = 1 000 000) para evitar errores de coma flotante.
-model EarningDaily {
+/// Vistas monetizadas por usuario, día (UTC) y país del espectador.
+/// No llevan importe: el dinero se calcula al cerrar el mes con el RPM real.
+model MonetizedViewDaily {
+  userId  String
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  day     DateTime @db.Date
+  /// Código ISO-2 del país (CF-IPCountry) o "XX" si es desconocido.
+  country String   @db.VarChar(2)
+  views   Int      @default(0)
+
+  @@id([userId, day, country])
+  @@index([day])
+}
+
+/// Cierre mensual: RPM real por país (del panel de Monetag) y porcentaje
+/// para los creadores. Un mes solo se cierra una vez.
+model RevenueSettlement {
+  /// "AAAA-MM" (UTC)
+  month            String   @id @db.VarChar(7)
+  /// Porcentaje del RPM real que se acredita a los creadores.
+  sharePct         Int
+  /// { "MX": 1500000, … } micro-USD por 1.000 vistas.
+  rpmByCountry     Json
+  /// RPM para los países sin valor propio.
+  defaultRpmMicros BigInt
+  /// Ingresos totales reportados por Monetag (tope opcional del reparto).
+  revenueMicros    BigInt?
+  /// Factor aplicado si el reparto superaba el tope (1 = sin recorte).
+  scale            Float    @default(1)
+  views            Int
+  creditedMicros   BigInt
+  /// Ganancias del modelo anterior (tarifa fija) convertidas al migrar.
+  legacy           Boolean  @default(false)
+  closedBy         String?
+  closedAt         DateTime @default(now())
+}
+
+/// Importe acreditado a un creador al cerrar un mes (por país).
+model EarningCredit {
+  id           String   @id @default(cuid())
   userId       String
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  day          DateTime @db.Date
-  /// T1 | T2 | T3 (ver src/server/monetization/tiers.ts)
-  tier         String
-  views        Int      @default(0)
-  amountMicros BigInt   @default(0)
+  month        String   @db.VarChar(7)
+  country      String   @db.VarChar(2)
+  views        Int
+  /// RPM real aplicado (micro-USD por 1.000 vistas).
+  rpmMicros    BigInt
+  amountMicros BigInt
+  createdAt    DateTime @default(now())
 
-  @@id([userId, day, tier])
-  @@index([day])
+  @@unique([userId, month, country])
+  @@index([month])
 }
 
 enum PayoutStatus {

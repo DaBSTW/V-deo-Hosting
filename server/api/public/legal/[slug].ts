@@ -13,7 +13,7 @@ const GET = handler(async (req) => {
     slug,
     slugs: LEGAL_SLUGS,
     // `?locale=` permite pedir otro idioma sin recargar (selector de idioma).
-    doc: getLegalDoc(isLocale(req.nextUrl.searchParams.get("locale")) ? (req.nextUrl.searchParams.get("locale") as "es" | "en") : localeFromRequest(req), slug),
+    doc: await getLegalDoc(isLocale(req.nextUrl.searchParams.get("locale")) ? (req.nextUrl.searchParams.get("locale") as "es" | "en") : localeFromRequest(req), slug),
     updated: getCoreEnv().LEGAL_LAST_UPDATED,
   });
 });

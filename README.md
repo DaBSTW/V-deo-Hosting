@@ -85,7 +85,7 @@ workers/r2-event-forwarder               (opcional) Worker: eventos R2 → webho
 | `POST`   | `/api/auth/logout`           | Cierra la sesión |
 | `GET`    | `/api/auth/me`               | Usuario de la sesión (o `null`) para la interfaz |
 | `GET`    | `/api/dashboard`             | Datos iniciales del panel (videos, carpetas, estadísticas, límite) |
-| `GET`    | `/api/public/home`           | Datos públicos de la portada (tarifas si la monetización está activa, límites) |
+| `GET`    | `/api/public/home`           | Datos públicos de la portada (porcentaje de reparto si la monetización está activa, límites) |
 | `GET`    | `/api/public/videos/:publicId` | Reproducción para `/v` y `/embed` (solo rutas `/media` propias) |
 | `GET`    | `/api/public/legal/:slug`    | Documento legal en el idioma del visitante (`?locale=` opcional) |
 | `GET`    | `/api/videos`                | Lista de videos del usuario (DTO público) |
@@ -97,10 +97,12 @@ workers/r2-event-forwarder               (opcional) Worker: eventos R2 → webho
 | `POST`   | `/api/videos/move`           | `{ videoIds[], folderId }` → mover varios a la vez |
 | `GET`    | `/api/stats`                 | Series diarias de reproducciones/descargas (180 días) y cuota |
 | `POST`   | `/media/:publicId/view`      | Aviso de reproducción (firmado; lo envía el reproductor al pulsar play) |
-| `GET`/`PATCH` | `/api/monetization`     | Saldo, ganancias, tarifas e historial / activar y método de cobro |
+| `GET`/`PATCH` | `/api/monetization`     | Saldo acreditado, mes en curso (vistas y estimación), ganancias por mes y país, historial / activar y método de cobro |
 | `POST`   | `/api/monetization/payouts`  | Solicitar el cobro del saldo disponible |
 | `GET`/`PUT` | `/api/admin/monetization` | (admin) Ajustes, código de Monetag y resumen |
 | `GET`    | `/api/admin/payouts`         | (admin) Cola de pagos |
+| `GET`    | `/api/admin/settlements`     | (admin) Mes en curso, meses pendientes de cerrar y cierres hechos |
+| `GET`/`POST` | `/api/admin/settlements/:month` | (admin) Vistas por país del mes / vista previa o cierre (`{ rpm, defaultRpm, revenue?, confirm }`) |
 | `PATCH`  | `/api/admin/payouts/:id`     | (admin) `approve` / `pay` (con referencia) / `reject` (con motivo) |
 | `GET`    | `/sw.js`                     | Service worker de Monetag (formato Push) |
 | `GET`/`POST` | `/api/kyc`               | Estado / envío (multipart) de la verificación de identidad |
@@ -153,7 +155,7 @@ Portada de presentación en `app/pages/index.vue` (ilustración del hero en `app
 sin imágenes). Secciones: hero, funciones, cómo funciona, código de inserción, monetización, preguntas frecuentes y
 llamada final. Todo el texto está en el bloque `landing` de los mensajes (es/en).
 
-* Las **tarifas por 1.000 vistas** se leen de los ajustes reales de monetización y solo se muestran si está activada.
+* El **porcentaje de reparto de ingresos** se lee de los ajustes reales de monetización; el ejemplo de RPM es ilustrativo y está marcado como tal.
 * El mínimo de retiro, el tamaño máximo de subida y los segundos de una vista monetizada salen de la configuración
   (`MIN_PAYOUT_USD`, `MAX_UPLOAD_MB`, ajustes de administración); no hay cifras inventadas.
 * Si el usuario ya tiene sesión, los botones llevan a su panel.
@@ -239,10 +241,19 @@ se borran también sus estadísticas.
 
 ## Monetización (Monetag)
 
-**Modelo:** Monetag te paga a ti por los anuncios que se muestran en el reproductor y en el enlace
-directo. Tú pagas a tus usuarios una **tarifa fija por cada 1.000 vistas monetizadas**, según el país
-del espectador (Nivel 1/2/3). El país lo da Cloudflare en `CF-IPCountry`; sin Cloudflare delante, todo
-cuenta como Nivel 3.
+**Modelo: reparto de ingresos (revenue share), sin tarifas fijas.** Monetag te paga a ti por los
+anuncios del reproductor y del enlace directo. Durante el mes la plataforma solo **cuenta vistas
+monetizadas por país** (sin importe). Al terminar el mes copias de Monetag el **RPM real de cada país**
+y el sistema acredita a cada creador el **`revenueSharePct` %** (30 % por defecto) de ese valor:
+
+```
+crédito = vistas del país ÷ 1.000 × RPM real del país × 30 %
+ej.: RPM real de México 1,50 $ → 0,45 $ por cada 1.000 vistas monetizadas de México
+```
+
+Si el CPM de Monetag baja un mes, baja también lo que se reparte: la plataforma no asume la pérdida.
+El país lo da Cloudflare en `CF-IPCountry`; sin Cloudflare delante, todo cuenta como desconocido (`XX`)
+y se liquida con el «RPM para los demás países».
 
 ### Puesta en marcha
 
@@ -251,7 +262,8 @@ cuenta como Nivel 3.
    y, si usas Push, el contenido de `sw.js` (se sirve en `/sw.js`).
 3. Crea las zonas y pega su código en «Código de anuncios para el reproductor». Solo se inserta en
    `/embed/*` y `/v/*` de videos monetizados, nunca en el dashboard.
-4. Ajusta tarifas y reglas.
+4. Ajusta el porcentaje de reparto y las reglas antifraude.
+5. Cada mes, en **Administración → Cierre mensual**, cierra el mes anterior (ver abajo).
 
 La monetización viene **activa por defecto**: el interruptor general de la plataforma y el de cada
 cuenta nueva están encendidos desde el primer momento (el usuario puede apagar el suyo en su panel).
@@ -264,8 +276,26 @@ Mientras no pegues el código de anuncios, ninguna vista genera ganancias, para 
   o el 50 % del video si es más corto, indicando si hay **bloqueador de anuncios** (con bloqueador no se paga).
 * El servidor descarta bots (por User-Agent), al propio dueño, repeticiones de la **misma IP y video en
   24 h** y lo que supere el **tope diario por IP**. Todo en memoria, sin consultar la DB.
-* Se acumula por lotes (`EarningDaily`, en micro-dólares) con la tarifa vigente en ese momento.
-* Las ganancias quedan **retenidas `holdDays` días** antes de poder cobrarse (margen antifraude).
+* Se acumula por lotes en `MonetizedViewDaily` (usuario · día · país), **sin importe**.
+* El dinero se calcula y acredita al **cerrar el mes**; hasta entonces el creador ve sus vistas y una
+  **estimación** (con el RPM del último cierre), claramente marcada como tal.
+
+### Cierre mensual
+
+1. En tu panel de Monetag, al final del mes, mira el **RPM por país** (y, si quieres, los ingresos totales).
+2. En **Administración → Cierre mensual** elige el mes (solo meses terminados) y escribe el RPM de cada
+   país, o pégalo con **«Pegar desde Monetag»** (una línea por país: `MX 1.50`, `México (MX)<tab>1,50`…).
+   Los países sin valor usan el **RPM para los demás países**.
+3. **Ingresos de Monetag del mes (opcional, recomendado):** activa un tope. El RPM de Monetag se mide sobre
+   sus impresiones, que nunca coinciden exactamente con nuestras vistas monetizadas. Con el tope, lo
+   repartido nunca supera el 30 % de lo que realmente cobraste; si lo superara, todos los créditos del mes
+   se reducen en la misma proporción (se avisa en la vista previa).
+4. **Calcular** muestra la vista previa (ingreso estimado, parte de los creadores y de la plataforma, por
+   país) y **Cerrar y acreditar** guarda el cierre (`RevenueSettlement`) y los créditos (`EarningCredit`).
+   El saldo de los creadores se actualiza al instante. Un mes solo se puede cerrar una vez.
+
+Al migrar desde el modelo anterior (tarifa fija), las ganancias ya acumuladas se convierten en créditos
+(«Modelo anterior») y ningún saldo cambia.
 
 ### Pagos
 
@@ -297,15 +327,13 @@ Al pulsar «Solicitar pago» por primera vez se abre el formulario:
 El **mínimo de retiro es de 25 USD** en todos los métodos (`MIN_PAYOUT_USD`). El administrador puede subirlo
 por método, pero no bajarlo de 25.
 
-### Cómo fijar las tarifas sin perder dinero
+### Cómo elegir el porcentaje de reparto
 
-* **Mide antes de prometer.** Activa los anuncios 2-4 semanas con tarifas conservadoras y calcula tu
-  **eCPM real por nivel** = ingresos de Monetag ÷ vistas monetizadas × 1.000.
-* **Paga entre el 50 y el 70 % de ese eCPM.** El resto cubre almacenamiento, Stream (si lo usas se
-  paga por minuto entregado), fraude no detectado y tu margen.
-* **Revisa las tarifas cada mes.** El eCPM de las redes de popunder varía mucho por país y temporada.
-  Un cambio de tarifa solo afecta a las vistas futuras.
-* Las tarifas por defecto (1,00 / 0,40 / 0,10 USD) son solo un punto de partida, no una recomendación de mercado.
+* El 30 % por defecto deja el 70 % para cubrir almacenamiento, Stream (si lo usas, se paga por minuto
+  entregado), fraude no detectado y tu margen. Puedes cambiarlo en Administración; el cambio solo se
+  aplica a los meses que cierres después (los Términos piden avisar a los usuarios con antelación).
+* Indica siempre los ingresos totales al cerrar: es lo que garantiza que nunca repartes más de lo que cobras.
+* No anuncies importes fijos («$1,50 por cada 1.000 vistas»): el RPM real cambia cada mes y por país.
 
 ## Página pública: descargar e insertar
 

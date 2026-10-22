@@ -3,8 +3,8 @@
  *
  * Cada evento solo incrementa un mapa en memoria (O(1), sin tocar la DB).
  * Cada FLUSH_MS se vuelca todo con TRES consultas SQL, sea cual sea el volumen:
- * upsert en VideoDailyStat, upsert de ganancias en EarningDaily y UPDATE de
- * los totales en Video. Así un pico
+ * upsert en VideoDailyStat, upsert de vistas monetizadas por país en
+ * MonetizedViewDaily y UPDATE de los totales en Video. Así un pico
  * de miles de reproducciones no se convierte en miles de escrituras.
  *
  * Los eventos se guardan por `publicId` (lo único que conoce el endpoint, que
@@ -15,8 +15,13 @@
  * totales siguen siendo correctos (todas suman en la misma tabla).
  */
 import { prisma } from "#srv/prisma";
-import { getMonetizationSettings, microsPerView } from "../monetization/settings";
-import { TIERS, tierOf, type Tier } from "../monetization/tiers";
+
+/** País del espectador (CF-IPCountry) normalizado: ISO-2 o "XX" si se desconoce. */
+export const normalizeCountry = (c: string | null | undefined) => {
+  const v = (c ?? "").trim().toUpperCase();
+  // "XX" = desconocido y "T1" = Tor en Cloudflare: ambos van a "XX".
+  return /^[A-Z]{2}$/.test(v) && v !== "T1" ? v : "XX";
+};
 
 const FLUSH_MS = 10_000;
 const MAX_PENDING = 2_000;
@@ -33,7 +38,7 @@ interface Counts {
 
 interface BufferState {
   pending: Map<string, Counts>;
-  /** Ganancias pendientes por `publicId|tier`. */
+  /** Vistas monetizadas pendientes por `publicId|país`. */
   earn: Map<string, number>;
   seen: Map<string, number>;
   /** Vistas monetizadas por IP en el día UTC actual (`día|ip`). */
@@ -95,7 +100,7 @@ export function recordPaidView(publicId: string, ip: string, country: string | n
   state.ipDaily.set(dayKey, today + 1);
   if (state.ipDaily.size > 200_000) state.ipDaily.clear();
 
-  const earnKey = `${publicId}|${tierOf(country)}`;
+  const earnKey = `${publicId}|${normalizeCountry(country)}`;
   state.earn.set(earnKey, (state.earn.get(earnKey) ?? 0) + 1);
   bump(publicId, "paid");
   return true;
@@ -117,15 +122,10 @@ export async function flushStats(): Promise<void> {
   const paid = batch.map(([, c]) => c.paid);
 
   const ePids = earnBatch.map(([k]) => k.split("|")[0]);
-  const eTiers = earnBatch.map(([k]) => k.split("|")[1]);
+  const eCountries = earnBatch.map(([k]) => k.split("|")[1]);
   const eViews = earnBatch.map(([, n]) => n);
 
   try {
-    // Ganancias: tarifa vigente en el momento del volcado.
-    const settings = await getMonetizationSettings();
-    const rateOf = Object.fromEntries(TIERS.map((t) => [t, microsPerView(settings, t)])) as Record<Tier, number>;
-    const eMicros = earnBatch.map(([k, n]) => n * rateOf[k.split("|")[1] as Tier]);
-
     await prisma.$transaction([
       prisma.$executeRaw`
         INSERT INTO "VideoDailyStat" ("videoId", "day", "views", "downloads", "paidViews")
@@ -136,17 +136,17 @@ export async function flushStats(): Promise<void> {
           "views" = "VideoDailyStat"."views" + EXCLUDED."views",
           "downloads" = "VideoDailyStat"."downloads" + EXCLUDED."downloads",
           "paidViews" = "VideoDailyStat"."paidViews" + EXCLUDED."paidViews"`,
-      // Solo suman los dueños con la monetización activada.
+      // Solo cuentan los dueños con la monetización activada. Sin importe: el
+      // dinero se calcula al cerrar el mes con el RPM real de cada país.
       prisma.$executeRaw`
-        INSERT INTO "EarningDaily" ("userId", "day", "tier", "views", "amountMicros")
-        SELECT v."userId", (now() AT TIME ZONE 'utc')::date, t.tier, SUM(t.n)::int, SUM(t.micros)::bigint
-        FROM unnest(${ePids}::text[], ${eTiers}::text[], ${eViews}::int[], ${eMicros}::bigint[]) AS t(pid, tier, n, micros)
+        INSERT INTO "MonetizedViewDaily" ("userId", "day", "country", "views")
+        SELECT v."userId", (now() AT TIME ZONE 'utc')::date, t.country, SUM(t.n)::int
+        FROM unnest(${ePids}::text[], ${eCountries}::text[], ${eViews}::int[]) AS t(pid, country, n)
         JOIN "Video" v ON v."publicId" = t.pid
         JOIN "User" u ON u."id" = v."userId" AND u."monetizationEnabled"
-        GROUP BY v."userId", t.tier
-        ON CONFLICT ("userId", "day", "tier") DO UPDATE SET
-          "views" = "EarningDaily"."views" + EXCLUDED."views",
-          "amountMicros" = "EarningDaily"."amountMicros" + EXCLUDED."amountMicros"`,
+        GROUP BY v."userId", t.country
+        ON CONFLICT ("userId", "day", "country") DO UPDATE SET
+          "views" = "MonetizedViewDaily"."views" + EXCLUDED."views"`,
       prisma.$executeRaw`
         UPDATE "Video" v SET
           "views" = v."views" + t.views,
