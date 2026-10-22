@@ -4,7 +4,7 @@ import { handler, json, methods } from "#srv/http";
 import { embedUrlFor } from "#srv/videos/dto";
 import { getEmbedPlayback } from "#srv/videos/service";
 import { premiumFromCookieHeader } from "#srv/premium/token";
-import { getPremiumSettings } from "#srv/premium/settings";
+import { getPremiumSettings, speedLimitActive } from "#srv/premium/settings";
 
 /**
  * GET /api/public/videos/:publicId — datos de reproducción para /v y /embed.
@@ -33,7 +33,7 @@ const GET = handler(async (req) => {
 async function premiumOffer() {
   const s = await getPremiumSettings();
   if (!s.enabled) return null;
-  return { monthlyUsd: s.plans.MONTHLY.priceUsd, yearlyUsd: s.plans.YEARLY.priceUsd, waitSec: s.freeDownloadWaitSec };
+  return { monthlyUsd: s.plans.MONTHLY.priceUsd, yearlyUsd: s.plans.YEARLY.priceUsd, waitSec: s.freeDownloadWaitSec, speedLimit: speedLimitActive(s) };
 }
 
 export default methods({ GET });

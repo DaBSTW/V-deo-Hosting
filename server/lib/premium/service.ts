@@ -15,7 +15,7 @@
  */
 import { prisma } from "#srv/prisma";
 import { APP_NAME } from "#shared/lib/brand";
-import { getCoreEnv, isPaypalConfigured } from "#srv/env";
+import { getCoreEnv, isGatewayConfigured, isPaypalConfigured } from "#srv/env";
 import { HttpError } from "../http";
 import { monthRange } from "../monetization/settlement";
 import * as paypal from "./paypal";
@@ -286,6 +286,7 @@ export async function getPremiumAdminSummary() {
   const mrr = (active.MONTHLY ?? 0) * settings.plans.MONTHLY.priceUsd + ((active.YEARLY ?? 0) * settings.plans.YEARLY.priceUsd) / 12;
   return {
     configured: isPaypalConfigured(),
+    gatewayConfigured: isGatewayConfigured(),
     subscribers,
     activeMonthly: active.MONTHLY ?? 0,
     activeYearly: active.YEARLY ?? 0,

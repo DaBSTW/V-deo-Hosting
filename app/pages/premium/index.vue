@@ -42,7 +42,7 @@ async function subscribe(p: Plan) {
 const rows = computed(() => [
   { key: "ads", free: t("premium.compare.adsFree"), premium: t("premium.compare.adsPremium"), freeBad: true },
   { key: "wait", free: t("premium.compare.waitFree", { seconds: info.value?.freeDownloadWaitSec ?? 30 }), premium: t("premium.compare.waitPremium"), freeBad: (info.value?.freeDownloadWaitSec ?? 30) > 0 },
-  { key: "speed", free: t("premium.compare.speedFree"), premium: t("premium.compare.speedPremium"), freeBad: true },
+  ...(info.value?.speedLimit ? [{ key: "speed", free: t("premium.compare.speedFree"), premium: t("premium.compare.speedPremium"), freeBad: true }] : []),
   { key: "creators", free: t("premium.compare.creatorsFree"), premium: t("premium.compare.creatorsPremium", { pct: info.value?.premiumSharePct ?? 50 }), freeBad: false },
 ]);
 
@@ -66,7 +66,7 @@ const openFaq = ref<number | null>(0);
         <h1 class="mx-auto mt-5 max-w-3xl text-balance text-4xl font-extrabold leading-[1.1] text-contrast sm:text-5xl">
           {{ t("premium.heroTitle") }}
         </h1>
-        <p class="mx-auto mt-4 max-w-2xl text-pretty text-lg text-secondary">{{ t("premium.heroText") }}</p>
+        <p class="mx-auto mt-4 max-w-2xl text-pretty text-lg text-secondary">{{ info?.speedLimit ? t("premium.heroText") : t("premium.heroTextNoSpeed") }}</p>
       </header>
 
       <div v-if="cancelled" class="mx-auto mt-8 max-w-xl rounded-2xl bg-orange-soft px-4 py-3 text-center text-sm font-semibold text-orange" role="status">
@@ -102,7 +102,7 @@ const openFaq = ref<number | null>(0);
               <li class="flex items-center gap-2 text-primary"><Check class="h-4 w-4 text-brand" />{{ t("premium.freeBullets.watch") }}</li>
               <li class="flex items-center gap-2 text-primary"><Minus class="h-4 w-4 text-secondary" />{{ t("premium.freeBullets.ads") }}</li>
               <li class="flex items-center gap-2 text-primary"><Minus class="h-4 w-4 text-secondary" />{{ t("premium.freeBullets.wait", { seconds: info.freeDownloadWaitSec }) }}</li>
-              <li class="flex items-center gap-2 text-primary"><Minus class="h-4 w-4 text-secondary" />{{ t("premium.freeBullets.speed") }}</li>
+              <li v-if="info.speedLimit" class="flex items-center gap-2 text-primary"><Minus class="h-4 w-4 text-secondary" />{{ t("premium.freeBullets.speed") }}</li>
             </ul>
             <UiButton :to="user ? '/dashboard' : '/register'" color="standard" block class="mt-6">{{ user ? t("premium.currentPlan") : t("landing.nav.createAccount") }}</UiButton>
           </section>
@@ -119,7 +119,7 @@ const openFaq = ref<number | null>(0);
             <ul class="mt-4 flex-1 space-y-2.5 text-sm">
               <li class="flex items-center gap-2 text-contrast"><MonitorPlay class="h-4 w-4 text-premium" />{{ t("premium.benefits.noAds") }}</li>
               <li class="flex items-center gap-2 text-contrast"><Timer class="h-4 w-4 text-premium" />{{ t("premium.benefits.noWait") }}</li>
-              <li class="flex items-center gap-2 text-contrast"><Gauge class="h-4 w-4 text-premium" />{{ t("premium.benefits.fullSpeed") }}</li>
+              <li v-if="info.speedLimit" class="flex items-center gap-2 text-contrast"><Gauge class="h-4 w-4 text-premium" />{{ t("premium.benefits.fullSpeed") }}</li>
               <li class="flex items-center gap-2 text-contrast"><HandCoins class="h-4 w-4 text-premium" />{{ t("premium.benefits.supportCreators", { pct: info.premiumSharePct }) }}</li>
             </ul>
             <UiButton color="premium" size="lg" block class="mt-6" :disabled="!!loading || !info.plans[plan].available" @click="subscribe(plan)">

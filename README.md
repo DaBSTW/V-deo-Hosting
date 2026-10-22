@@ -350,8 +350,12 @@ Suscripción opcional para **espectadores**, cobrada con **PayPal** (mensual 4,9
 * **Descargar sin esperar**: los gratuitos ven una cuenta atrás de 30 s en el propio botón (si hay
   varias calidades, empieza al elegirla). La espera la impone el servidor: el ticket de descarga
   (`/media/<id>/download?nb=…`) no vale antes de tiempo y el nivel (`t=f|p`) va firmado.
-* **Velocidad sin límite**: las descargas gratuitas pasan por el Worker `workers/download-gateway`,
-  que las limita (500 KB/s por defecto); las Premium van directas al proveedor.
+* **Velocidad de descarga (opcional, apagada por defecto)**: con el interruptor «Limitar la velocidad
+  de descarga gratuita» de Administración → Premium y el Worker `workers/download-gateway` desplegado,
+  las descargas gratuitas se limitan (500 KB/s por defecto) y las Premium siguen directas al proveedor.
+  Mientras esté apagado, gratuitos y Premium descargan a toda velocidad y la plataforma **no anuncia**
+  «velocidad sin límite» como ventaja. El Worker es casi gratis, pero en el plan gratuito de Cloudflare
+  (10 ms de CPU por petición) puede cortar archivos de varios GB; con el plan de 5 $/mes no hay problema.
 * **Se anuncia en toda la plataforma**: enlace en la cabecera y el pie, sección en la portada,
   página `/premium`, tarjeta en la página del video, aviso durante la cuenta atrás y en el panel.
   En los reproductores insertados en webs ajenas no se muestra publicidad de Premium.
@@ -373,7 +377,8 @@ Suscripción opcional para **espectadores**, cobrada con **PayPal** (mensual 4,9
    Un cambio de precio crea un plan nuevo; los suscriptores actuales siguen con el suyo.
 3. Añade el webhook `https://<tu dominio>/api/webhooks/paypal` en la app de PayPal (eventos
    `BILLING.SUBSCRIPTION.*` y `PAYMENT.SALE.*`).
-4. (Opcional) Despliega `workers/download-gateway` y rellena `DOWNLOAD_GATEWAY_URL` / `DOWNLOAD_GATEWAY_SECRET`.
+4. (Opcional, para limitar la velocidad de los gratuitos) Despliega `workers/download-gateway`, rellena
+   `DOWNLOAD_GATEWAY_URL` / `DOWNLOAD_GATEWAY_SECRET` y activa el interruptor en Administración → Premium.
 
 La fuente de verdad siempre es la API de PayPal: el retorno del pago, los webhooks y el cron diario
 (`npm run premium:sync`) solo provocan una relectura. Un webhook falso no puede activar nada.

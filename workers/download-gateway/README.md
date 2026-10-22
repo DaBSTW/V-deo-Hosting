@@ -1,4 +1,7 @@
-# download-gateway (opcional)
+# download-gateway (opcional, apagado por defecto)
+
+Para usarlo: despliégalo, rellena las variables del `.env` y activa
+**Administración → Premium → «Limitar la velocidad de descarga gratuita»**.
 
 Sirve las descargas de los usuarios **gratuitos** a velocidad limitada
 (`freeDownloadKbps`, ajustable en Administración → Premium). Los usuarios

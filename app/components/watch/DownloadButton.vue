@@ -12,7 +12,7 @@
 import { Check, ChevronDown, Crown, Download, LoaderCircle } from "lucide-vue-next";
 import type { DownloadChoice } from "~/types/video";
 
-const props = defineProps<{ publicId: string; options: DownloadChoice[]; premium: boolean; waitSec?: number }>();
+const props = defineProps<{ publicId: string; options: DownloadChoice[]; premium: boolean; waitSec?: number; speedLimit?: boolean }>();
 const { t } = useI18n();
 const fmt = useFormat();
 const open = ref(false);
@@ -135,7 +135,7 @@ function onMain() {
     <!-- Mientras espera: la alternativa sin esperas. -->
     <div v-if="phase === 'counting' && !premium" class="absolute left-0 top-full z-20 mt-2 w-72 rounded-2xl border border-divider bg-raised p-3 shadow-floating">
       <p class="text-sm font-bold text-contrast">{{ t("watch.skipWaitTitle") }}</p>
-      <p class="mt-0.5 text-xs text-secondary">{{ t("watch.skipWaitText") }}</p>
+      <p class="mt-0.5 text-xs text-secondary">{{ speedLimit ? t("watch.skipWaitText") : t("watch.skipWaitTextNoSpeed") }}</p>
       <UiButton to="/premium" color="premium" size="sm" class="mt-2.5"><Crown />{{ t("premium.cta") }}</UiButton>
     </div>
     <p v-if="chosen && phase === 'counting' && !single" class="sr-only">{{ labelOf(chosen) }}</p>

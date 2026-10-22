@@ -1,6 +1,6 @@
 import { handler, json, methods } from "#srv/http";
 import { getCoreEnv } from "#srv/env";
-import { DEFAULT_PREMIUM, getPremiumSettings } from "#srv/premium/settings";
+import { DEFAULT_PREMIUM, getPremiumSettings, speedLimitActive } from "#srv/premium/settings";
 import { DEFAULT_SETTINGS, MIN_PAYOUT_USD, getMonetizationSettings, parseMetaTag } from "#srv/monetization/settings";
 
 /**
@@ -20,7 +20,7 @@ const GET = handler(async () => {
     revenueSharePct: settings.enabled ? settings.revenueSharePct : null,
     verificationMeta: parseMetaTag(settings.monetagMetaTag),
     premium: premium.enabled
-      ? { monthlyUsd: premium.plans.MONTHLY.priceUsd, yearlyUsd: premium.plans.YEARLY.priceUsd, waitSec: premium.freeDownloadWaitSec, sharePct: premium.premiumSharePct }
+      ? { monthlyUsd: premium.plans.MONTHLY.priceUsd, yearlyUsd: premium.plans.YEARLY.priceUsd, waitSec: premium.freeDownloadWaitSec, sharePct: premium.premiumSharePct, speedLimit: speedLimitActive(premium) }
       : null,
   });
 });

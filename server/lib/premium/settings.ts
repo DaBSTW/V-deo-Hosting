@@ -4,6 +4,7 @@
  */
 import { z } from "zod";
 import { prisma } from "#srv/prisma";
+import { isGatewayConfigured } from "#srv/env";
 
 export const PREMIUM_PLANS = ["MONTHLY", "YEARLY"] as const;
 export type PremiumPlan = (typeof PREMIUM_PLANS)[number];
@@ -26,7 +27,13 @@ export const premiumSettingsSchema = z.object({
   paypalProductId: z.string().max(64),
   /** Espera antes de descargar para los usuarios gratuitos (0 = sin espera). */
   freeDownloadWaitSec: z.number().int().min(0).max(300),
-  /** Velocidad de descarga gratuita en KB/s (requiere el Worker de descargas). */
+  /**
+   * Limitar la velocidad de las descargas gratuitas. Apagado por defecto: solo
+   * tiene efecto si además está desplegado el Worker de descargas
+   * (DOWNLOAD_GATEWAY_URL / DOWNLOAD_GATEWAY_SECRET).
+   */
+  freeSpeedLimitEnabled: z.boolean(),
+  /** Velocidad de descarga gratuita en KB/s (si el límite está activo). */
   freeDownloadKbps: z.number().int().min(50).max(100_000),
   /** Parte de los ingresos netos de Premium que se reparte entre los creadores. */
   premiumSharePct: z.number().int().min(0).max(90),
@@ -41,6 +48,7 @@ export const DEFAULT_PREMIUM: PremiumSettings = {
   },
   paypalProductId: "",
   freeDownloadWaitSec: 30,
+  freeSpeedLimitEnabled: false,
   freeDownloadKbps: 500,
   premiumSharePct: 50,
 };
@@ -76,6 +84,9 @@ export async function savePremiumSettings(value: PremiumSettings): Promise<Premi
   return clean;
 }
 
+/** El límite de velocidad solo se aplica (y se anuncia) si está activado Y el Worker existe. */
+export const speedLimitActive = (s: PremiumSettings) => s.freeSpeedLimitEnabled && isGatewayConfigured();
+
 /** Datos públicos para la página /premium (sin IDs de PayPal). */
 export async function publicPremiumInfo() {
   const s = await getPremiumSettings();
@@ -91,6 +102,8 @@ export async function publicPremiumInfo() {
     yearlySavingPct: monthly > 0 ? Math.max(0, Math.round((1 - yearly / (monthly * 12)) * 100)) : 0,
     freeDownloadWaitSec: s.freeDownloadWaitSec,
     freeDownloadKbps: s.freeDownloadKbps,
+    /** Si los gratuitos tienen la velocidad limitada (si no, no se anuncia «sin límite»). */
+    speedLimit: speedLimitActive(s),
     premiumSharePct: s.premiumSharePct,
   };
 }

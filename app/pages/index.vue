@@ -26,7 +26,7 @@ interface HomeData {
   minWatchSeconds: number;
   revenueSharePct: number | null;
   verificationMeta: { name: string; content: string } | null;
-  premium: { monthlyUsd: number; yearlyUsd: number; waitSec: number; sharePct: number } | null;
+  premium: { monthlyUsd: number; yearlyUsd: number; waitSec: number; sharePct: number; speedLimit: boolean } | null;
 }
 
 const { t } = useI18n();
@@ -63,11 +63,14 @@ const share = computed(() => data.value?.revenueSharePct ?? 30);
 const example = computed(() => ({ rpm: fmt.formatUsd(1.5), creator: fmt.formatUsd((1.5 * share.value) / 100) }));
 const openFaq = ref<number | null>(1);
 
-const premiumBenefits = [
-  { key: "noAds", icon: MonitorPlay },
-  { key: "noWait", icon: Timer },
-  { key: "speed", icon: Gauge },
-] as const;
+/** «Velocidad sin límite» solo se anuncia si los gratuitos la tienen limitada. */
+const premiumBenefits = computed(() =>
+  [
+    { key: "noAds", icon: MonitorPlay },
+    { key: "noWait", icon: Timer },
+    { key: "speed", icon: Gauge },
+  ].filter((b) => b.key !== "speed" || data.value?.premium?.speedLimit),
+);
 /** Precio mensual más bajo (el anual prorrateado si sale más barato). */
 const premiumFrom = computed(() => {
   const p = data.value?.premium;
@@ -220,7 +223,7 @@ function faqAnswer(n: number): string {
         <div class="relative min-w-0">
           <span class="inline-flex items-center gap-1.5 rounded-full bg-premium px-3 py-1 text-sm font-extrabold"><Crown class="h-4 w-4" />Premium</span>
           <h2 class="mt-4 text-balance text-3xl font-extrabold leading-tight text-contrast sm:text-4xl">{{ t("landing.premium.title") }}</h2>
-          <p class="mt-3 max-w-xl text-lg text-secondary">{{ t("landing.premium.text", { pct: data.premium.sharePct }) }}</p>
+          <p class="mt-3 max-w-xl text-lg text-secondary">{{ (data.premium.speedLimit ? t("landing.premium.text", { pct: data.premium.sharePct }) : t("landing.premium.textNoSpeed", { pct: data.premium.sharePct })) }}</p>
           <div class="mt-7 flex flex-wrap items-center gap-3">
             <UiButton to="/premium" color="premium" size="lg"><Crown />{{ t("premium.ctaFrom", { price: premiumFrom }) }}</UiButton>
             <span class="text-sm font-semibold text-secondary">{{ t("premium.cancelAnytime") }}</span>

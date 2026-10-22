@@ -30,4 +30,6 @@ export interface OperatorInfo {
   premiumYearlyUsd: number;
   freeDownloadWaitSec: number;
   premiumSharePct: number;
+  /** Si los usuarios gratuitos tienen la velocidad de descarga limitada. */
+  freeSpeedLimit: boolean;
 }

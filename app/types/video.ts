@@ -11,6 +11,7 @@ export interface PremiumOffer {
   monthlyUsd: number;
   yearlyUsd: number;
   waitSec: number;
+  speedLimit: boolean;
 }
 
 export type PublicPlayback =

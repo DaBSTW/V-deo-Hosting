@@ -5,6 +5,7 @@ import type { PremiumSettings } from "#srv/premium/settings";
 
 interface Summary {
   configured: boolean;
+  gatewayConfigured: boolean;
   subscribers: number;
   activeMonthly: number;
   activeYearly: number;
@@ -111,6 +112,14 @@ async function run(kind: "save" | "plans" | "subs") {
         </fieldset>
         <fieldset class="min-w-0">
           <legend class="mb-2 text-xs font-bold uppercase tracking-wide text-secondary">{{ t("adminPremium.freeLegend") }}</legend>
+          <div class="mb-3 flex items-center justify-between gap-4 rounded-xl bg-button px-4 py-3">
+            <div class="min-w-0">
+              <p class="font-bold text-contrast">{{ t("adminPremium.speedLimit") }}</p>
+              <p class="text-xs text-secondary">{{ t("adminPremium.speedLimitHint") }}</p>
+              <p v-if="settings.freeSpeedLimitEnabled && !summary.gatewayConfigured" class="mt-1 text-xs font-semibold text-orange">{{ t("adminPremium.gatewayMissing") }}</p>
+            </div>
+            <UiToggle :model-value="settings.freeSpeedLimitEnabled" :label="t('adminPremium.speedLimit')" @update:model-value="(v) => ((settings!.freeSpeedLimitEnabled = v), touch())" />
+          </div>
           <div class="grid grid-cols-3 gap-2">
             <label class="block min-w-0">
               <span class="label !text-xs">{{ t("adminPremium.waitSec") }}</span>
@@ -118,7 +127,7 @@ async function run(kind: "save" | "plans" | "subs") {
             </label>
             <label class="block min-w-0">
               <span class="label !text-xs">{{ t("adminPremium.kbps") }}</span>
-              <input type="number" min="50" :value="settings.freeDownloadKbps" class="input" @input="(settings!.freeDownloadKbps = num(($event.target as HTMLInputElement).value)), touch()" />
+              <input type="number" min="50" :disabled="!settings.freeSpeedLimitEnabled" :value="settings.freeDownloadKbps" class="input disabled:opacity-50" @input="(settings!.freeDownloadKbps = num(($event.target as HTMLInputElement).value)), touch()" />
             </label>
             <label class="block min-w-0">
               <span class="label !text-xs">{{ t("adminPremium.sharePct") }}</span>

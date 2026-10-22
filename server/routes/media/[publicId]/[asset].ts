@@ -8,7 +8,7 @@ import { SESSION_COOKIE, verifySession } from "#srv/auth/jwt";
 import { resolveDownload, resolveMediaUrl } from "#srv/videos/service";
 import { getMonetizationSettings } from "#srv/monetization/settings";
 import { recordPaidView, recordPremiumView, recordView } from "#srv/videos/stats-buffer";
-import { getPremiumSettings } from "#srv/premium/settings";
+import { getPremiumSettings, speedLimitActive } from "#srv/premium/settings";
 import { premiumFromCookieHeader } from "#srv/premium/token";
 import { gatewayUrl } from "#srv/videos/download-gateway";
 
@@ -53,8 +53,8 @@ const GET = handler(async (req) => {
 /**
  * GET /media/:publicId/download?q=&nb=&t=&e=&s= — canje del ticket de descarga.
  * Antes de `nb` no vale (la espera de los gratuitos se impone aquí, no en el
- * navegador). Premium → URL directa del proveedor; gratuito → Worker con
- * velocidad limitada (o directa si el Worker no está configurado).
+ * navegador). Premium → URL directa del proveedor; gratuito → también directa,
+ * salvo que esté activado el límite de velocidad (Worker con velocidad limitada).
  */
 async function download(req: ApiRequest, publicId: string, q: URLSearchParams, t: ReturnType<typeof translatorFor>) {
   if (!isPublicVideoId(publicId)) return text(t("media.invalidLink"), 403);
@@ -69,7 +69,9 @@ async function download(req: ApiRequest, publicId: string, q: URLSearchParams, t
   if (!result || result.status === "unavailable") return text(t("media.downloadUnavailable"), 404);
   if (result.status === "preparing") return statusPage(t, t("media.preparingTitle"), t("media.preparing"), 15, 202, t("media.preparingHint"));
   if (ticket.tier === "f") {
-    const throttled = gatewayUrl(result.url, (await getPremiumSettings()).freeDownloadKbps);
+    // Límite de velocidad opcional (apagado por defecto): requiere el Worker.
+    const premium = await getPremiumSettings();
+    const throttled = speedLimitActive(premium) ? gatewayUrl(result.url, premium.freeDownloadKbps) : null;
     if (throttled) return redirect(throttled, "private, no-store");
   }
   return redirect(result.url, "private, no-store");

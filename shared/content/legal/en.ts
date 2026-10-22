@@ -70,7 +70,7 @@ export function legalDocsEn(o: OperatorInfo): Record<LegalSlug, LegalDoc> {
         {
           title: "8. Premium subscription",
           blocks: [
-            `Premium is an optional paid subscription for viewers: ad-free playback on ${o.app}, downloads without the ${o.freeDownloadWaitSec}-second wait and without a speed limit. Prices: ${o.premiumMonthlyUsd.toFixed(2)} USD per month or ${o.premiumYearlyUsd.toFixed(2)} USD per year, including applicable taxes unless the checkout page says otherwise.`,
+            `Premium is an optional paid subscription for viewers: ad-free playback on ${o.app}, downloads without the ${o.freeDownloadWaitSec}-second wait${o.freeSpeedLimit ? " and without a speed limit" : ""}. Prices: ${o.premiumMonthlyUsd.toFixed(2)} USD per month or ${o.premiumYearlyUsd.toFixed(2)} USD per year, including applicable taxes unless the checkout page says otherwise.`,
             {
               list: [
                 "Payments are processed by PayPal. We do not store your card or PayPal account details; only the subscription and payment identifiers.",

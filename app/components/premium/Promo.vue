@@ -5,7 +5,10 @@
  */
 import { ChevronRight, Crown, Gauge, MonitorPlay, Timer } from "lucide-vue-next";
 
-const props = withDefaults(defineProps<{ variant?: "card" | "slim"; monthlyUsd?: number | null; yearlyUsd?: number | null }>(), { variant: "card", monthlyUsd: null, yearlyUsd: null });
+const props = withDefaults(
+  defineProps<{ variant?: "card" | "slim"; monthlyUsd?: number | null; yearlyUsd?: number | null; speedLimit?: boolean }>(),
+  { variant: "card", monthlyUsd: null, yearlyUsd: null, speedLimit: false },
+);
 const { t } = useI18n();
 const fmt = useFormat();
 const fromPrice = computed(() => {
@@ -25,7 +28,7 @@ const fromPrice = computed(() => {
       <ul class="mt-3 space-y-2 text-sm text-primary">
         <li class="flex items-center gap-2"><MonitorPlay class="h-4 w-4 shrink-0 text-premium" />{{ t("premium.benefits.noAds") }}</li>
         <li class="flex items-center gap-2"><Timer class="h-4 w-4 shrink-0 text-premium" />{{ t("premium.benefits.noWait") }}</li>
-        <li class="flex items-center gap-2"><Gauge class="h-4 w-4 shrink-0 text-premium" />{{ t("premium.benefits.fullSpeed") }}</li>
+        <li v-if="speedLimit" class="flex items-center gap-2"><Gauge class="h-4 w-4 shrink-0 text-premium" />{{ t("premium.benefits.fullSpeed") }}</li>
       </ul>
       <p v-if="fromPrice" class="mt-4 text-sm font-semibold text-secondary">
         <span class="text-2xl font-extrabold text-contrast">{{ fromPrice }}</span> {{ t("premium.perMonth") }}
@@ -41,7 +44,7 @@ const fromPrice = computed(() => {
     <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-premium"><Crown class="h-5 w-5" /></span>
     <span class="min-w-0 flex-1">
       <span class="block text-sm font-extrabold text-contrast">{{ t("premium.slimTitle") }}</span>
-      <span class="block truncate text-xs text-secondary">{{ t("premium.slimText") }}</span>
+      <span class="block truncate text-xs text-secondary">{{ speedLimit ? t("premium.slimText") : t("premium.slimTextNoSpeed") }}</span>
     </span>
     <span v-if="fromPrice" class="shrink-0 text-sm font-bold text-premium">{{ t("premium.fromShort", { price: fromPrice }) }}</span>
     <ChevronRight v-else class="h-5 w-5 shrink-0 text-premium" />

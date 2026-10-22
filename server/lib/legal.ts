@@ -3,7 +3,7 @@ import { APP_NAME } from "#shared/lib/brand";
 import type { AppLocale } from "#shared/i18n/config";
 import type { LegalSlug } from "#shared/content/legal/links";
 import { DEFAULT_SETTINGS, MIN_PAYOUT_USD, getMonetizationSettings } from "#srv/monetization/settings";
-import { DEFAULT_PREMIUM, getPremiumSettings } from "#srv/premium/settings";
+import { DEFAULT_PREMIUM, getPremiumSettings, speedLimitActive } from "#srv/premium/settings";
 import { legalDocsEn } from "#shared/content/legal/en";
 import { legalDocsEs } from "#shared/content/legal/es";
 import type { LegalDoc, OperatorInfo } from "#shared/content/legal/types";
@@ -28,6 +28,7 @@ export async function operatorInfo(): Promise<OperatorInfo> {
     premiumYearlyUsd: premium.plans.YEARLY.priceUsd,
     freeDownloadWaitSec: premium.freeDownloadWaitSec,
     premiumSharePct: premium.premiumSharePct,
+    freeSpeedLimit: speedLimitActive(premium),
   };
 }
 

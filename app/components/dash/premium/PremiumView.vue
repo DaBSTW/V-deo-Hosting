@@ -74,13 +74,13 @@ const cancel = () =>
         </div>
         <UiButton color="standard" :disabled="busy" @click="sync"><RefreshCw :class="busy ? 'animate-spin' : ''" />{{ t("premium.refresh") }}</UiButton>
       </div>
-      <ul class="relative mt-5 grid gap-2 text-sm sm:grid-cols-3">
+      <ul :class="['relative mt-5 grid gap-2 text-sm', info?.speedLimit ? 'sm:grid-cols-3' : 'sm:grid-cols-2']">
         <li class="flex items-center gap-2 rounded-xl bg-button px-3 py-2.5 font-semibold text-contrast"><MonitorPlay class="h-4 w-4 text-premium" />{{ t("premium.benefits.noAds") }}</li>
         <li class="flex items-center gap-2 rounded-xl bg-button px-3 py-2.5 font-semibold text-contrast"><Timer class="h-4 w-4 text-premium" />{{ t("premium.benefits.noWait") }}</li>
-        <li class="flex items-center gap-2 rounded-xl bg-button px-3 py-2.5 font-semibold text-contrast"><Gauge class="h-4 w-4 text-premium" />{{ t("premium.benefits.fullSpeed") }}</li>
+        <li v-if="info?.speedLimit" class="flex items-center gap-2 rounded-xl bg-button px-3 py-2.5 font-semibold text-contrast"><Gauge class="h-4 w-4 text-premium" />{{ t("premium.benefits.fullSpeed") }}</li>
       </ul>
     </section>
-    <PremiumPromo v-else :monthly-usd="info?.plans.MONTHLY.priceUsd" :yearly-usd="info?.plans.YEARLY.priceUsd" />
+    <PremiumPromo v-else :monthly-usd="info?.plans.MONTHLY.priceUsd" :yearly-usd="info?.plans.YEARLY.priceUsd" :speed-limit="info?.speedLimit" />
 
     <!-- Suscripción -->
     <DashCard v-if="sub" :title="t('premium.subscriptionTitle')" :subtitle="t('premium.subscriptionSubtitle')">

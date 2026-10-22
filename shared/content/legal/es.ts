@@ -70,7 +70,7 @@ export function legalDocsEs(o: OperatorInfo): Record<LegalSlug, LegalDoc> {
         {
           title: "8. Suscripción Premium",
           blocks: [
-            `Premium es una suscripción opcional de pago para espectadores: reproducción sin anuncios en ${o.app}, descargas sin la espera de ${o.freeDownloadWaitSec} segundos y sin límite de velocidad. Precios: ${o.premiumMonthlyUsd.toFixed(2)} USD al mes o ${o.premiumYearlyUsd.toFixed(2)} USD al año, impuestos incluidos si corresponden, salvo que la página de pago indique otra cosa.`,
+            `Premium es una suscripción opcional de pago para espectadores: reproducción sin anuncios en ${o.app}, descargas sin la espera de ${o.freeDownloadWaitSec} segundos${o.freeSpeedLimit ? " y sin límite de velocidad" : ""}. Precios: ${o.premiumMonthlyUsd.toFixed(2)} USD al mes o ${o.premiumYearlyUsd.toFixed(2)} USD al año, impuestos incluidos si corresponden, salvo que la página de pago indique otra cosa.`,
             {
               list: [
                 "El pago se procesa con PayPal. No almacenamos los datos de tu tarjeta ni de tu cuenta de PayPal; solo el identificador de la suscripción y de cada cobro.",

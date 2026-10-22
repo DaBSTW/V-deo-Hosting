@@ -53,6 +53,7 @@ const qualityLabel = (o: { kind: string; height: number | null }) =>
             :options="data.downloads"
             :premium="data.viewer.premium"
             :wait-sec="data.offer?.waitSec"
+            :speed-limit="data.offer?.speedLimit"
           />
           <UiButton :color="embedOpen ? 'highlight' : 'standard'" :aria-expanded="embedOpen" @click="embedOpen = !embedOpen"><Code />{{ t("watch.embed") }}</UiButton>
           <UiButton :color="copied ? 'highlight' : 'standard'" @click="copyLink">
@@ -63,11 +64,11 @@ const qualityLabel = (o: { kind: string; height: number | null }) =>
       </section>
 
       <WatchEmbedPanel v-if="embedOpen && data.state === 'ready'" :embed-url="data.embedUrl" :title="data.title" />
-      <PremiumPromo v-if="data.state === 'ready' && data.offer" variant="slim" :monthly-usd="data.offer.monthlyUsd" :yearly-usd="data.offer.yearlyUsd" class="lg:hidden" />
+      <PremiumPromo v-if="data.state === 'ready' && data.offer" variant="slim" :monthly-usd="data.offer.monthlyUsd" :yearly-usd="data.offer.yearlyUsd" :speed-limit="data.offer.speedLimit" class="lg:hidden" />
     </div>
 
     <aside class="min-w-0 space-y-5">
-      <PremiumPromo v-if="data.state === 'ready' && data.offer" :monthly-usd="data.offer.monthlyUsd" :yearly-usd="data.offer.yearlyUsd" class="max-lg:hidden" />
+      <PremiumPromo v-if="data.state === 'ready' && data.offer" :monthly-usd="data.offer.monthlyUsd" :yearly-usd="data.offer.yearlyUsd" :speed-limit="data.offer.speedLimit" class="max-lg:hidden" />
       <div v-else-if="data.state === 'ready' && data.viewer.premium" class="flex items-center gap-2 rounded-2xl bg-premium-soft px-4 py-3 text-sm font-semibold text-contrast">
         <Crown class="h-4 w-4 text-premium" />{{ t("premium.viewerActive") }}
       </div>
