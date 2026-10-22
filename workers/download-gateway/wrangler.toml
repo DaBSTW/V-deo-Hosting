@@ -1,0 +1,9 @@
+name = "download-gateway"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+# Dominio propio recomendado (p. ej. dl.midominio.com):
+# routes = [{ pattern = "dl.midominio.com", custom_domain = true }]
+
+# DOWNLOAD_GATEWAY_SECRET → `npx wrangler secret put DOWNLOAD_GATEWAY_SECRET`
+# (mismo valor que en el .env del VPS: openssl rand -base64 32)

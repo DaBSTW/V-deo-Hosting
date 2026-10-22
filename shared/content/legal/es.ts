@@ -68,42 +68,58 @@ export function legalDocsEs(o: OperatorInfo): Record<LegalSlug, LegalDoc> {
           ],
         },
         {
-          title: "8. Suspensión y cancelación",
+          title: "8. Suscripción Premium",
+          blocks: [
+            `Premium es una suscripción opcional de pago para espectadores: reproducción sin anuncios en ${o.app}, descargas sin la espera de ${o.freeDownloadWaitSec} segundos y sin límite de velocidad. Precios: ${o.premiumMonthlyUsd.toFixed(2)} USD al mes o ${o.premiumYearlyUsd.toFixed(2)} USD al año, impuestos incluidos si corresponden, salvo que la página de pago indique otra cosa.`,
+            {
+              list: [
+                "El pago se procesa con PayPal. No almacenamos los datos de tu tarjeta ni de tu cuenta de PayPal; solo el identificador de la suscripción y de cada cobro.",
+                "La suscripción se renueva automáticamente al final de cada periodo hasta que la canceles. Puedes cancelarla en cualquier momento desde tu panel o desde PayPal; conservarás las ventajas hasta el final del periodo ya pagado.",
+                "Salvo que la ley de tu país disponga otra cosa, los periodos ya iniciados no se reembolsan. Si un cobro se reembolsa o se revierte, las ventajas asociadas terminan.",
+                "Podemos cambiar el precio avisándote con antelación; el nuevo precio solo se aplica a las suscripciones nuevas o a partir de la siguiente renovación tras el aviso.",
+                "En los reproductores insertados en otros sitios, las ventajas dependen de que tu navegador permita la cookie de Premium; si la bloquea, el reproductor se comporta como para un usuario gratuito.",
+                `El ${o.premiumSharePct} % de los ingresos netos de Premium se reparte entre los creadores según las vistas de suscriptores que reciben sus videos, conforme a los Términos del programa de monetización.`,
+              ],
+            },
+          ],
+        },
+        {
+          title: "9. Suspensión y cancelación",
           blocks: [
             "Puedes dejar de usar el servicio y eliminar tu contenido en cualquier momento. Podemos suspender o cancelar tu cuenta si incumples estos Términos, si lo exige la ley o si tu uso pone en riesgo el servicio o a terceros. En caso de fraude, las ganancias pendientes podrán ser retenidas conforme a los Términos del programa de monetización.",
           ],
         },
         {
-          title: "9. Exención de garantías",
+          title: "10. Exención de garantías",
           blocks: [
             "El servicio se ofrece «tal cual» y «según disponibilidad». En la medida permitida por la ley, no garantizamos que funcione sin interrupciones o errores, ni que el contenido almacenado no pueda perderse. Te recomendamos conservar copias de tus archivos originales.",
           ],
         },
         {
-          title: "10. Limitación de responsabilidad",
+          title: "11. Limitación de responsabilidad",
           blocks: [
             "En la medida permitida por la ley, no seremos responsables de daños indirectos, lucro cesante, pérdida de datos o daños derivados del contenido de los usuarios. Nuestra responsabilidad total frente a ti no superará la mayor de estas cantidades: lo que nos hayas pagado en los últimos 12 meses, o 100 USD. Nada de lo anterior limita la responsabilidad que la ley no permita limitar.",
           ],
         },
         {
-          title: "11. Indemnización",
+          title: "12. Indemnización",
           blocks: [
             "Te comprometes a mantenernos indemnes frente a reclamaciones de terceros derivadas del contenido que subas o del incumplimiento de estos Términos.",
           ],
         },
         {
-          title: "12. Ley aplicable",
+          title: "13. Ley aplicable",
           blocks: [
             `Estos Términos se rigen por las leyes${where}. Cualquier controversia se someterá a los tribunales competentes de esa jurisdicción, sin perjuicio de los derechos que te reconozca la normativa de protección de consumidores de tu país de residencia.`,
           ],
         },
         {
-          title: "13. Cambios",
+          title: "14. Cambios",
           blocks: [
             "Podemos actualizar estos Términos. Si los cambios son importantes, te avisaremos por el servicio o por email antes de que entren en vigor. Si sigues usando el servicio después, aceptas la nueva versión.",
           ],
         },
-        { title: "14. Contacto", blocks: [`Para cualquier consulta sobre estos Términos: ${o.email}.`] },
+        { title: "15. Contacto", blocks: [`Para cualquier consulta sobre estos Términos: ${o.email}.`] },
       ],
     },
 
@@ -155,6 +171,7 @@ export function legalDocsEs(o: OperatorInfo): Record<LegalSlug, LegalDoc> {
                 "Proveedor del servidor donde se aloja la plataforma y su base de datos.",
                 "Redes publicitarias (como Monetag), que pueden tratar datos de los espectadores de las páginas públicas según sus propias políticas de privacidad.",
                 "Proveedores de pago (como PayPal, Payoneer, redes de criptomonedas o tu banco) para enviarte tus ganancias.",
+                "PayPal, para cobrar la suscripción Premium. PayPal trata tus datos de pago como responsable independiente según su propia política de privacidad; nosotros solo recibimos el estado de la suscripción y el importe de cada cobro.",
                 "Autoridades, cuando lo exija la ley.",
               ],
             },
@@ -215,6 +232,7 @@ export function legalDocsEs(o: OperatorInfo): Record<LegalSlug, LegalDoc> {
             {
               list: [
                 "vh_session: mantiene tu sesión iniciada. Es estrictamente necesaria y dura 7 días.",
+                "dp: pase firmado que indica si tu cuenta es Premium, para no mostrarte anuncios ni esperas (también en los reproductores insertados). Dura como máximo 3 días y se renueva sola.",
                 "NEXT_LOCALE: recuerda el idioma que elegiste. Dura 1 año.",
               ],
             },
@@ -367,6 +385,7 @@ export function legalDocsEs(o: OperatorInfo): Record<LegalSlug, LegalDoc> {
             `El total repartido a los creadores en un mes nunca supera el ${o.revenueSharePct} % de los ingresos que efectivamente recibimos de la red publicitaria por ese mes; si lo superara, todos los créditos del mes se reducen en la misma proporción. Las estimaciones que veas en tu panel durante el mes son orientativas y no son un importe garantizado.`,
             "Podemos cambiar el porcentaje de reparto avisándote con antelación; el cambio solo se aplica a los meses que se cierren después.",
             "Una vista es monetizada cuando el espectador reproduce el video el tiempo mínimo indicado en tu panel, sin bloqueador de anuncios. Solo cuenta una vista por persona y video cada 24 horas, hay un límite diario por persona, y se excluyen los bots y tus propias reproducciones.",
+            `Suscriptores Premium: no ven anuncios, así que sus vistas no generan ingresos por RPM. A cambio, al cerrar cada mes repartimos el ${o.premiumSharePct} % de los ingresos netos de Premium imputables a ese mes (después de las comisiones de PayPal; el plan anual se reparte a partes iguales entre sus 12 meses) en proporción a las vistas completas de suscriptores que recibió cada creador, con las mismas reglas de duración mínima y antifraude.`,
           ],
         },
         {

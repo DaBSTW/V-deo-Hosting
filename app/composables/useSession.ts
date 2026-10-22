@@ -2,6 +2,8 @@ export interface SessionUser {
   email: string;
   name: string | null;
   isAdmin: boolean;
+  premium: boolean;
+  premiumUntil: string | null;
 }
 
 /** Usuario de la sesión, cargado una vez por visita (plugin `session`). */

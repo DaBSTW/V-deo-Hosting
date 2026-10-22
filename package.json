@@ -13,7 +13,8 @@
     "worker:hls": "tsx --tsconfig scripts/tsconfig.json scripts/hls-worker.ts",
     "cleanup:stale": "tsx --tsconfig scripts/tsconfig.json scripts/cleanup-stale-uploads.ts",
     "postinstall": "prisma generate && nuxt prepare",
-    "kyc:purge": "tsx --tsconfig scripts/tsconfig.json scripts/purge-kyc-documents.ts"
+    "kyc:purge": "tsx --tsconfig scripts/tsconfig.json scripts/purge-kyc-documents.ts",
+    "premium:sync": "tsx --tsconfig scripts/tsconfig.json scripts/sync-premium.ts"
   },
   "engines": {
     "node": ">=20.9.0"

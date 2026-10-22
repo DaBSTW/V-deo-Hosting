@@ -174,3 +174,36 @@ const streamSchema = z.object({
 export const getStreamEnv = memo(() => parse("stream", streamSchema));
 export const isStreamConfigured = () =>
   !!process.env.CF_ACCOUNT_ID && !!process.env.CF_STREAM_API_TOKEN;
+
+// ---------------------------------------------------------------------------
+// PayPal (suscripción Premium)
+// ---------------------------------------------------------------------------
+const paypalSchema = z.object({
+  PAYPAL_CLIENT_ID: z.string().min(1),
+  PAYPAL_CLIENT_SECRET: z.string().min(1),
+  /** `sandbox` para pruebas con cuentas ficticias, `live` para cobrar de verdad. */
+  PAYPAL_ENV: z.enum(["sandbox", "live"]).default("sandbox"),
+  /** Solo para pruebas (mock de la API). */
+  PAYPAL_API_BASE: optionalUrl,
+});
+export const getPaypalEnv = memo(() => {
+  const env = parse("paypal", paypalSchema);
+  const base = env.PAYPAL_API_BASE ?? (env.PAYPAL_ENV === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com");
+  return { ...env, base };
+});
+export const isPaypalConfigured = () => !!process.env.PAYPAL_CLIENT_ID && !!process.env.PAYPAL_CLIENT_SECRET;
+
+// ---------------------------------------------------------------------------
+// Worker de descargas (velocidad limitada para usuarios gratuitos)
+// ---------------------------------------------------------------------------
+const gatewaySchema = z.object({
+  /** URL del Worker `workers/download-gateway`, p. ej. https://dl.midominio.com */
+  DOWNLOAD_GATEWAY_URL: z
+    .string()
+    .url()
+    .transform((v) => v.replace(/\/+$/, "")),
+  /** Clave AES-256 compartida con el Worker (32 bytes en base64). */
+  DOWNLOAD_GATEWAY_SECRET: z.string().refine((v) => Buffer.from(v, "base64").length === 32, "DOWNLOAD_GATEWAY_SECRET debe ser 32 bytes en base64"),
+});
+export const getGatewayEnv = memo(() => parse("gateway", gatewaySchema));
+export const isGatewayConfigured = () => !!process.env.DOWNLOAD_GATEWAY_URL && !!process.env.DOWNLOAD_GATEWAY_SECRET;

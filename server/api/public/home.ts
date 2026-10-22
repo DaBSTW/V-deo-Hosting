@@ -1,5 +1,6 @@
 import { handler, json, methods } from "#srv/http";
 import { getCoreEnv } from "#srv/env";
+import { DEFAULT_PREMIUM, getPremiumSettings } from "#srv/premium/settings";
 import { DEFAULT_SETTINGS, MIN_PAYOUT_USD, getMonetizationSettings, parseMetaTag } from "#srv/monetization/settings";
 
 /**
@@ -8,6 +9,7 @@ import { DEFAULT_SETTINGS, MIN_PAYOUT_USD, getMonetizationSettings, parseMetaTag
  */
 const GET = handler(async () => {
   const settings = await getMonetizationSettings().catch(() => DEFAULT_SETTINGS);
+  const premium = await getPremiumSettings().catch(() => DEFAULT_PREMIUM);
   const { APP_URL, MAX_UPLOAD_MB } = getCoreEnv();
   return json({
     appUrl: APP_URL,
@@ -17,6 +19,9 @@ const GET = handler(async () => {
     /** Porcentaje del RPM real que reciben los creadores (reparto de ingresos). */
     revenueSharePct: settings.enabled ? settings.revenueSharePct : null,
     verificationMeta: parseMetaTag(settings.monetagMetaTag),
+    premium: premium.enabled
+      ? { monthlyUsd: premium.plans.MONTHLY.priceUsd, yearlyUsd: premium.plans.YEARLY.priceUsd, waitSec: premium.freeDownloadWaitSec, sharePct: premium.premiumSharePct }
+      : null,
   });
 });
 

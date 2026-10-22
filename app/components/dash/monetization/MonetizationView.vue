@@ -3,7 +3,7 @@
  * Sección «Monetización» del usuario (reparto de ingresos): saldo acreditado,
  * mes en curso con estimación, ganancias por mes y país, cobro e historial.
  */
-import { CalendarCheck, CalendarClock, Check, CircleAlert, Clock, HandCoins, Lock, ShieldCheck, TriangleAlert, Wallet } from "lucide-vue-next";
+import { CalendarCheck, CalendarClock, Check, CircleAlert, Clock, Crown, HandCoins, Lock, ShieldCheck, TriangleAlert, Wallet } from "lucide-vue-next";
 import type { MonetizationOverview } from "#srv/monetization/earnings";
 
 const d = useDashboard();
@@ -217,6 +217,10 @@ const KYC_COLOR = { NONE: "gray", PENDING: "orange", APPROVED: "brand", REJECTED
           <h2 class="mt-4 text-xl font-extrabold text-contrast">{{ t("monetization.shareTitle", { share }) }}</h2>
           <p class="mt-2 text-sm leading-relaxed text-primary">{{ t("monetization.shareText", { share }) }}</p>
           <p class="mt-4 rounded-xl bg-button px-4 py-3 text-sm font-semibold text-contrast">{{ t("monetization.shareExample", example) }}</p>
+          <p v-if="data.premium.sharePct > 0" class="mt-3 flex items-start gap-2 rounded-xl bg-premium-soft px-4 py-3 text-sm text-primary">
+            <Crown class="mt-0.5 h-4 w-4 shrink-0 text-premium" />
+            <span>{{ t("monetization.premiumShare", { pct: data.premium.sharePct, views: fmt.formatCount(data.premium.currentViews) }) }}</span>
+          </p>
         </div>
       </DashCard>
 
@@ -284,7 +288,10 @@ const KYC_COLOR = { NONE: "gray", PENDING: "orange", APPROVED: "brand", REJECTED
               <tr v-for="m in data.months" :key="m.month">
                 <td class="py-3 pr-3 font-semibold first-letter:uppercase text-contrast">{{ monthLabel(m.month) }}</td>
                 <td class="py-3 pr-3 text-right text-primary">{{ fmt.formatCount(m.views) }}</td>
-                <td class="py-3 pr-3 text-right font-bold text-contrast">{{ m.amountMicros != null ? fmt.formatMicros(m.amountMicros) : "—" }}</td>
+                <td class="py-3 pr-3 text-right font-bold text-contrast">
+                  {{ m.amountMicros != null ? fmt.formatMicros(m.amountMicros) : "—" }}
+                  <span v-if="m.premiumMicros" class="block text-xs font-semibold text-premium">{{ t("monetization.premiumPart", { amount: fmt.formatMicros(m.premiumMicros) }) }}</span>
+                </td>
                 <td class="py-3"><UiBadge :color="MONTH_COLOR[m.status]">{{ t(`monetization.monthStatus.${m.status}`) }}</UiBadge></td>
               </tr>
             </tbody>

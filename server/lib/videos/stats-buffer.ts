@@ -2,9 +2,10 @@
  * Contador de vistas / descargas con escritura por lotes.
  *
  * Cada evento solo incrementa un mapa en memoria (O(1), sin tocar la DB).
- * Cada FLUSH_MS se vuelca todo con TRES consultas SQL, sea cual sea el volumen:
+ * Cada FLUSH_MS se vuelca todo con CUATRO consultas SQL, sea cual sea el volumen:
  * upsert en VideoDailyStat, upsert de vistas monetizadas por país en
- * MonetizedViewDaily y UPDATE de los totales en Video. Así un pico
+ * MonetizedViewDaily, upsert de vistas Premium en PremiumViewDaily y UPDATE de
+ * los totales en Video. Así un pico
  * de miles de reproducciones no se convierte en miles de escrituras.
  *
  * Los eventos se guardan por `publicId` (lo único que conoce el endpoint, que
@@ -40,6 +41,8 @@ interface BufferState {
   pending: Map<string, Counts>;
   /** Vistas monetizadas pendientes por `publicId|país`. */
   earn: Map<string, number>;
+  /** Vistas completas de suscriptores Premium pendientes por `publicId`. */
+  premium: Map<string, number>;
   seen: Map<string, number>;
   /** Vistas monetizadas por IP en el día UTC actual (`día|ip`). */
   ipDaily: Map<string, number>;
@@ -47,8 +50,9 @@ interface BufferState {
 }
 
 const g = globalThis as unknown as { __statsBuffer?: BufferState };
-const state: BufferState = (g.__statsBuffer ??= { pending: new Map(), earn: new Map(), seen: new Map(), ipDaily: new Map() });
+const state: BufferState = (g.__statsBuffer ??= { pending: new Map(), earn: new Map(), premium: new Map(), seen: new Map(), ipDaily: new Map() });
 state.earn ??= new Map();
+state.premium ??= new Map();
 state.ipDaily ??= new Map();
 
 function schedule(ms: number) {
@@ -57,9 +61,9 @@ function schedule(ms: number) {
   state.timer.unref?.();
 }
 
-function bump(publicId: string, field: keyof Counts) {
+function bump(publicId: string, field: keyof Counts, by = 1) {
   const c = state.pending.get(publicId) ?? { views: 0, downloads: 0, paid: 0 };
-  c[field]++;
+  c[field] += by;
   state.pending.set(publicId, c);
   if (state.pending.size >= MAX_PENDING) void flushStats();
   else schedule(FLUSH_MS);
@@ -106,7 +110,28 @@ export function recordPaidView(publicId: string, ip: string, country: string | n
   return true;
 }
 
-/** Vuelca el búfer a la base de datos (dos consultas por lote). */
+/**
+ * Vista completa de un suscriptor Premium (no ve anuncios). No se paga por
+ * país: al cerrar el mes, la parte de los ingresos de Premium se reparte según
+ * estas vistas. Antifraude: 1 por suscriptor y video cada 24 h y tope diario.
+ */
+export function recordPremiumView(publicId: string, viewerId: string, perViewerDailyCap: number): boolean {
+  const now = Date.now();
+  const key = `prem|${viewerId}|${publicId}`;
+  if ((state.seen.get(key) ?? 0) > now) return false;
+  const dayKey = `${new Date().toISOString().slice(0, 10)}|prem|${viewerId}`;
+  const today = state.ipDaily.get(dayKey) ?? 0;
+  if (today >= perViewerDailyCap) return false;
+
+  state.seen.set(key, now + PAID_DEDUPE_MS);
+  state.ipDaily.set(dayKey, today + 1);
+  state.premium.set(publicId, (state.premium.get(publicId) ?? 0) + 1);
+  // Solo programa el volcado: la reproducción ya se contó al empezar y no es una vista con anuncios.
+  bump(publicId, "views", 0);
+  return true;
+}
+
+/** Vuelca el búfer a la base de datos (cuatro consultas por lote). */
 export async function flushStats(): Promise<void> {
   clearTimeout(state.timer);
   state.timer = undefined;
@@ -114,8 +139,12 @@ export async function flushStats(): Promise<void> {
 
   const batch = [...state.pending];
   const earnBatch = [...state.earn];
+  const premiumBatch = [...state.premium];
   state.pending.clear();
   state.earn.clear();
+  state.premium.clear();
+  const pPids = premiumBatch.map(([k]) => k);
+  const pViews = premiumBatch.map(([, n]) => n);
   const ids = batch.map(([id]) => id);
   const views = batch.map(([, c]) => c.views);
   const downloads = batch.map(([, c]) => c.downloads);
@@ -148,6 +177,15 @@ export async function flushStats(): Promise<void> {
         ON CONFLICT ("userId", "day", "country") DO UPDATE SET
           "views" = "MonetizedViewDaily"."views" + EXCLUDED."views"`,
       prisma.$executeRaw`
+        INSERT INTO "PremiumViewDaily" ("userId", "day", "views")
+        SELECT v."userId", (now() AT TIME ZONE 'utc')::date, SUM(t.n)::int
+        FROM unnest(${pPids}::text[], ${pViews}::int[]) AS t(pid, n)
+        JOIN "Video" v ON v."publicId" = t.pid
+        JOIN "User" u ON u."id" = v."userId" AND u."monetizationEnabled"
+        GROUP BY v."userId"
+        ON CONFLICT ("userId", "day") DO UPDATE SET
+          "views" = "PremiumViewDaily"."views" + EXCLUDED."views"`,
+      prisma.$executeRaw`
         UPDATE "Video" v SET
           "views" = v."views" + t.views,
           "downloads" = v."downloads" + t.downloads
@@ -161,6 +199,7 @@ export async function flushStats(): Promise<void> {
       state.pending.set(id, { views: cur.views + c.views, downloads: cur.downloads + c.downloads, paid: cur.paid + c.paid });
     }
     for (const [k, n] of earnBatch) state.earn.set(k, (state.earn.get(k) ?? 0) + n);
+    for (const [k, n] of premiumBatch) state.premium.set(k, (state.premium.get(k) ?? 0) + n);
     console.error("[stats] volcado falló, se reintentará:", err);
     schedule(FLUSH_MS * 3);
   }

@@ -25,6 +25,7 @@ const year = new Date().getFullYear();
           <li><NuxtLink to="/#how" class="text-secondary hover:text-contrast hover:underline">{{ t("landing.nav.howItWorks") }}</NuxtLink></li>
           <li><NuxtLink to="/#monetization" class="text-secondary hover:text-contrast hover:underline">{{ t("landing.nav.monetization") }}</NuxtLink></li>
           <li><NuxtLink to="/#faq" class="text-secondary hover:text-contrast hover:underline">{{ t("landing.nav.faq") }}</NuxtLink></li>
+          <li><NuxtLink to="/premium" class="font-semibold text-premium hover:underline">Premium</NuxtLink></li>
         </ul>
       </nav>
       <nav :aria-label="t('ui.footerAccount')">

@@ -39,3 +39,29 @@ export function verifyMediaToken(
   const given = Buffer.from(sig);
   return expected.length === given.length && timingSafeEqual(expected, given);
 }
+
+/** `f` = gratuito (espera + velocidad limitada), `p` = Premium. */
+export type DownloadTier = "f" | "p";
+/** Margen para empezar la descarga una vez cumplida la espera. */
+const TICKET_TTL_SEC = 15 * 60;
+
+/**
+ * Ticket de descarga: enlace firmado que NO vale antes de `notBefore`. La
+ * espera de los usuarios gratuitos se impone en el servidor (el contador del
+ * botón solo la muestra) y el nivel va firmado: no se puede cambiar `t=f` por `t=p`.
+ */
+export function downloadTicketPath(publicId: string, optionId: string, notBefore: number, tier: DownloadTier): string {
+  const exp = notBefore + TICKET_TTL_SEC;
+  const variant = `${optionId}|${notBefore}|${tier}`;
+  const q = optionId ? `q=${encodeURIComponent(optionId)}&` : "";
+  return `/media/${publicId}/download?${q}nb=${notBefore}&t=${tier}&e=${exp}&s=${mac(payload(publicId, "download", variant, exp))}`;
+}
+
+export function verifyDownloadTicket(publicId: string, q: URLSearchParams): { optionId: string; notBefore: number; tier: DownloadTier } | null {
+  const optionId = q.get("q") ?? "";
+  const nb = Number(q.get("nb"));
+  const tier = q.get("t");
+  if (!Number.isInteger(nb) || (tier !== "f" && tier !== "p")) return null;
+  if (!verifyMediaToken(publicId, "download", `${optionId}|${nb}|${tier}`, q.get("e"), q.get("s"))) return null;
+  return { optionId, notBefore: nb, tier };
+}

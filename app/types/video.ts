@@ -1,10 +1,16 @@
 import type { PlaybackSource } from "#srv/video-providers/types";
 
 export interface DownloadChoice {
+  id: string;
   kind: "original" | "rendition" | "single";
   height: number | null;
   sizeBytes: number | null;
-  path: string;
+}
+
+export interface PremiumOffer {
+  monthlyUsd: number;
+  yearlyUsd: number;
+  waitSec: number;
 }
 
 export type PublicPlayback =
@@ -21,4 +27,6 @@ export type PublicPlayback =
       monetization: { qualifyAfterSec: number; adSnippet?: string } | null;
       watchUrl: string;
       embedUrl: string;
+      viewer: { premium: boolean };
+      offer: PremiumOffer | null;
     };

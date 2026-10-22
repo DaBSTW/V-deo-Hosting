@@ -4,14 +4,17 @@ import {
   ChartNoAxesColumn,
   Check,
   Code,
+  Crown,
   Download,
   FolderOpen,
+  Gauge,
   Globe,
   Languages,
   Lock,
   MonitorPlay,
   Plus,
   ShieldCheck,
+  Timer,
   Upload,
   Zap,
 } from "lucide-vue-next";
@@ -23,6 +26,7 @@ interface HomeData {
   minWatchSeconds: number;
   revenueSharePct: number | null;
   verificationMeta: { name: string; content: string } | null;
+  premium: { monthlyUsd: number; yearlyUsd: number; waitSec: number; sharePct: number } | null;
 }
 
 const { t } = useI18n();
@@ -58,6 +62,18 @@ const features = [
 const share = computed(() => data.value?.revenueSharePct ?? 30);
 const example = computed(() => ({ rpm: fmt.formatUsd(1.5), creator: fmt.formatUsd((1.5 * share.value) / 100) }));
 const openFaq = ref<number | null>(1);
+
+const premiumBenefits = [
+  { key: "noAds", icon: MonitorPlay },
+  { key: "noWait", icon: Timer },
+  { key: "speed", icon: Gauge },
+] as const;
+/** Precio mensual más bajo (el anual prorrateado si sale más barato). */
+const premiumFrom = computed(() => {
+  const p = data.value?.premium;
+  if (!p) return "";
+  return fmt.formatUsd(Math.floor(Math.min(p.monthlyUsd, p.yearlyUsd / 12) * 100) / 100);
+});
 
 function faqAnswer(n: number): string {
   if (n === 2) return t("landing.faq.a2", { max: fmt.formatBytes(data.value?.maxUploadBytes ?? 0) });
@@ -194,6 +210,31 @@ function faqAnswer(n: number): string {
           </div>
           <p v-if="data && data.revenueSharePct == null" class="mt-3 text-xs text-secondary">{{ t("landing.monetization.hidden") }}</p>
         </div>
+      </div>
+    </section>
+
+    <!-- Premium -->
+    <section v-if="data?.premium" id="premium" class="mx-auto max-w-[1280px] scroll-mt-20 px-4 pt-24 sm:px-6">
+      <div class="relative grid grid-cols-1 items-center gap-10 overflow-hidden rounded-3xl border border-divider bg-surface p-6 sm:p-10 lg:grid-cols-[1.1fr_1fr]">
+        <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(55%_80%_at_100%_0%,var(--premium-glow),transparent)]" />
+        <div class="relative min-w-0">
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-premium px-3 py-1 text-sm font-extrabold"><Crown class="h-4 w-4" />Premium</span>
+          <h2 class="mt-4 text-balance text-3xl font-extrabold leading-tight text-contrast sm:text-4xl">{{ t("landing.premium.title") }}</h2>
+          <p class="mt-3 max-w-xl text-lg text-secondary">{{ t("landing.premium.text", { pct: data.premium.sharePct }) }}</p>
+          <div class="mt-7 flex flex-wrap items-center gap-3">
+            <UiButton to="/premium" color="premium" size="lg"><Crown />{{ t("premium.ctaFrom", { price: premiumFrom }) }}</UiButton>
+            <span class="text-sm font-semibold text-secondary">{{ t("premium.cancelAnytime") }}</span>
+          </div>
+        </div>
+        <ul class="relative grid min-w-0 gap-3">
+          <li v-for="b in premiumBenefits" :key="b.key" class="flex items-start gap-3.5 rounded-2xl bg-raised p-4 shadow-card">
+            <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-premium-soft"><component :is="b.icon" class="h-5 w-5 text-premium" /></span>
+            <span class="min-w-0">
+              <span class="block font-extrabold text-contrast">{{ t.dynamic(`landing.premium.${b.key}Title`) }}</span>
+              <span class="block text-sm text-secondary">{{ t.dynamic(`landing.premium.${b.key}Text`, { seconds: data.premium.waitSec }) }}</span>
+            </span>
+          </li>
+        </ul>
       </div>
     </section>
 

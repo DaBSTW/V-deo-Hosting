@@ -14,6 +14,7 @@ export type { PublicFolder, PublicVideo, PublicVideoStatus, DashboardStats };
 export type FolderFilter =
   | { kind: "overview" }
   | { kind: "monetization" }
+  | { kind: "premium" }
   | { kind: "admin" }
   | { kind: "all" }
   | { kind: "none" }
@@ -34,6 +35,7 @@ export interface DashboardUser {
   email: string;
   name: string | null;
   isAdmin: boolean;
+  premium: boolean;
 }
 
 export interface DashboardInitial {
@@ -109,6 +111,7 @@ export function createDashboard(initial: DashboardInitial): DashboardStore {
   const filter = computed<FolderFilter>(() => {
     const folder = typeof route.query.folder === "string" ? route.query.folder : undefined;
     if (folder === "monetization") return { kind: "monetization" };
+    if (folder === "premium") return { kind: "premium" };
     if (folder === "admin" && initial.user.isAdmin) return { kind: "admin" };
     if (folder === "all") return { kind: "all" };
     if (folder === "none") return { kind: "none" };

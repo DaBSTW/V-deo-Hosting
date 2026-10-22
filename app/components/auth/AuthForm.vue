@@ -24,7 +24,7 @@ async function submit() {
     if (!res.ok) throw new Error(data.details?.[0] ?? data.error ?? t("auth.genericError"));
     await refresh();
     const next = typeof route.query.next === "string" ? route.query.next : "";
-    await navigateTo(next.startsWith("/dashboard") ? next : "/dashboard", { replace: true });
+    await navigateTo(/^\/(dashboard|premium)(?:[/?#]|$)/.test(next) ? next : "/dashboard", { replace: true });
   } catch (err) {
     error.value = (err as Error).message;
     loading.value = false;
@@ -83,7 +83,7 @@ async function submit() {
 
     <p class="text-center text-sm text-secondary">
       {{ isLogin ? t("auth.noAccount") : t("auth.haveAccount") }}
-      <NuxtLink :to="isLogin ? '/register' : '/login'" class="font-bold text-brand hover:underline">{{ isLogin ? t("auth.goRegister") : t("auth.goLogin") }}</NuxtLink>
+      <NuxtLink :to="{ path: isLogin ? '/register' : '/login', query: route.query.next ? { next: route.query.next } : {} }" class="font-bold text-brand hover:underline">{{ isLogin ? t("auth.goRegister") : t("auth.goLogin") }}</NuxtLink>
     </p>
   </form>
 </template>

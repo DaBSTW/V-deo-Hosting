@@ -3,6 +3,7 @@ import { APP_NAME } from "#shared/lib/brand";
 import type { AppLocale } from "#shared/i18n/config";
 import type { LegalSlug } from "#shared/content/legal/links";
 import { DEFAULT_SETTINGS, MIN_PAYOUT_USD, getMonetizationSettings } from "#srv/monetization/settings";
+import { DEFAULT_PREMIUM, getPremiumSettings } from "#srv/premium/settings";
 import { legalDocsEn } from "#shared/content/legal/en";
 import { legalDocsEs } from "#shared/content/legal/es";
 import type { LegalDoc, OperatorInfo } from "#shared/content/legal/types";
@@ -10,6 +11,7 @@ import type { LegalDoc, OperatorInfo } from "#shared/content/legal/types";
 /** Datos del operador (variables LEGAL_* del .env) que se insertan en los textos. */
 export async function operatorInfo(): Promise<OperatorInfo> {
   const settings = await getMonetizationSettings().catch(() => DEFAULT_SETTINGS);
+  const premium = await getPremiumSettings().catch(() => DEFAULT_PREMIUM);
   const env = getCoreEnv();
   return {
     app: APP_NAME,
@@ -22,6 +24,10 @@ export async function operatorInfo(): Promise<OperatorInfo> {
     kycRetentionDays: env.KYC_RETENTION_DAYS,
     minPayoutUsd: MIN_PAYOUT_USD,
     revenueSharePct: settings.revenueSharePct,
+    premiumMonthlyUsd: premium.plans.MONTHLY.priceUsd,
+    premiumYearlyUsd: premium.plans.YEARLY.priceUsd,
+    freeDownloadWaitSec: premium.freeDownloadWaitSec,
+    premiumSharePct: premium.premiumSharePct,
   };
 }
 

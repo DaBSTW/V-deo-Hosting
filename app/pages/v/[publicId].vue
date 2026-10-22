@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** /v/:publicId — enlace directo para compartir: reproductor, descarga e inserción. */
-import { Check, Clock, Code, Download, Globe, Link as LinkIcon } from "lucide-vue-next";
+import { Check, Clock, Code, Crown, Download, Globe, Link as LinkIcon } from "lucide-vue-next";
 
 const route = useRoute();
 const { t } = useI18n();
@@ -47,7 +47,13 @@ const qualityLabel = (o: { kind: string; height: number | null }) =>
           <span class="inline-flex items-center gap-1.5"><Globe class="h-4 w-4" />{{ t("ui.poweredBy", { app: appName }) }}</span>
         </div>
         <div v-if="data.state === 'ready'" class="mt-5 flex flex-wrap items-center gap-2 border-t border-divider pt-5">
-          <WatchDownloadButton v-if="data.downloads.length" :options="data.downloads" />
+          <WatchDownloadButton
+            v-if="data.downloads.length"
+            :public-id="data.publicId"
+            :options="data.downloads"
+            :premium="data.viewer.premium"
+            :wait-sec="data.offer?.waitSec"
+          />
           <UiButton :color="embedOpen ? 'highlight' : 'standard'" :aria-expanded="embedOpen" @click="embedOpen = !embedOpen"><Code />{{ t("watch.embed") }}</UiButton>
           <UiButton :color="copied ? 'highlight' : 'standard'" @click="copyLink">
             <component :is="copied ? Check : LinkIcon" />
@@ -57,9 +63,14 @@ const qualityLabel = (o: { kind: string; height: number | null }) =>
       </section>
 
       <WatchEmbedPanel v-if="embedOpen && data.state === 'ready'" :embed-url="data.embedUrl" :title="data.title" />
+      <PremiumPromo v-if="data.state === 'ready' && data.offer" variant="slim" :monthly-usd="data.offer.monthlyUsd" :yearly-usd="data.offer.yearlyUsd" class="lg:hidden" />
     </div>
 
     <aside class="min-w-0 space-y-5">
+      <PremiumPromo v-if="data.state === 'ready' && data.offer" :monthly-usd="data.offer.monthlyUsd" :yearly-usd="data.offer.yearlyUsd" class="max-lg:hidden" />
+      <div v-else-if="data.state === 'ready' && data.viewer.premium" class="flex items-center gap-2 rounded-2xl bg-premium-soft px-4 py-3 text-sm font-semibold text-contrast">
+        <Crown class="h-4 w-4 text-premium" />{{ t("premium.viewerActive") }}
+      </div>
       <section class="card">
         <h2 class="mb-4 text-lg font-extrabold text-contrast">{{ t("ui.details") }}</h2>
         <dl class="space-y-3 text-sm">
@@ -70,7 +81,7 @@ const qualityLabel = (o: { kind: string; height: number | null }) =>
           <template v-if="data.state === 'ready' && data.downloads.length">
             <div class="flex items-center gap-2 pt-1 font-semibold text-secondary"><Download class="h-4 w-4" />{{ t("ui.qualities") }}</div>
             <div class="flex flex-wrap gap-1.5">
-              <UiBadge v-for="o in data.downloads" :key="o.path" :dot="false">{{ qualityLabel(o) }}<template v-if="o.sizeBytes"> · {{ fmt.formatBytes(o.sizeBytes) }}</template></UiBadge>
+              <UiBadge v-for="o in data.downloads" :key="o.id" :dot="false">{{ qualityLabel(o) }}<template v-if="o.sizeBytes"> · {{ fmt.formatBytes(o.sizeBytes) }}</template></UiBadge>
             </div>
           </template>
         </dl>

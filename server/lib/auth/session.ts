@@ -8,6 +8,7 @@ export interface SessionUser {
   id: string;
   email: string;
   name: string | null;
+  premiumUntil: Date | null;
 }
 
 /**
@@ -19,7 +20,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   if (!claims) return null;
   return prisma.user.findUnique({
     where: { id: claims.sub },
-    select: { id: true, email: true, name: true },
+    select: { id: true, email: true, name: true, premiumUntil: true },
   });
 }
 

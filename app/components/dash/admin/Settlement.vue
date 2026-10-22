@@ -3,7 +3,7 @@
  * Cierre mensual (reparto de ingresos): el admin copia de Monetag el RPM real
  * de cada país, revisa la vista previa y acredita el % de los creadores.
  */
-import { CalendarCheck, Calculator, ClipboardPaste, Lock, TriangleAlert } from "lucide-vue-next";
+import { CalendarCheck, Calculator, ClipboardPaste, Crown, Lock, TriangleAlert } from "lucide-vue-next";
 import type { SettlementPreview } from "#srv/monetization/settlement";
 
 const props = defineProps<{ share: number }>();
@@ -16,7 +16,7 @@ const fmt = useFormat();
 interface Overview {
   current: { month: string; views: number };
   pending: { month: string; views: number }[];
-  closed: { month: string; sharePct: number; views: number; creditedMicros: number; revenueMicros: number | null; scale: number; legacy: boolean; closedAt: string }[];
+  closed: { month: string; sharePct: number; views: number; creditedMicros: number; revenueMicros: number | null; scale: number; legacy: boolean; premiumCreditedMicros: number; premiumViews: number; closedAt: string }[];
 }
 interface MonthDetail {
   month: string;
@@ -121,7 +121,7 @@ function close() {
   if (!m || !p) return;
   confirm({
     title: t("admin.settlement.confirmTitle", { month: monthLabel(m) }),
-    message: t("admin.settlement.confirmText", { amount: fmt.formatMicros(p.creditedMicros), count: p.creators }),
+    message: t("admin.settlement.confirmText", { amount: fmt.formatMicros(p.creditedMicros + p.premium.creditedMicros), count: p.creators }),
     confirmLabel: t("admin.settlement.close", { month: monthLabel(m) }),
     onConfirm: async () => {
       try {
@@ -254,6 +254,14 @@ const platformMicros = computed(() => {
                 <p class="mt-1 text-xl font-extrabold tabular-nums text-contrast">{{ fmt.formatMicros(platformMicros) }}</p>
               </div>
             </div>
+            <!-- Bolsa de Premium (independiente del RPM de Monetag) -->
+            <div v-if="preview && (preview.premium.revenueMicros > 0 || preview.premium.views > 0)" class="flex flex-wrap items-center gap-3 rounded-2xl bg-premium-soft px-4 py-3 text-sm">
+              <Crown class="h-5 w-5 shrink-0 text-premium" />
+              <p class="min-w-0 flex-1 text-primary">
+                {{ t("admin.settlement.premiumPool", { revenue: fmt.formatMicros(preview.premium.revenueMicros), pct: preview.premium.sharePct, views: fmt.formatCount(preview.premium.views), creators: preview.premium.creators }) }}
+              </p>
+              <p class="font-extrabold tabular-nums text-contrast">{{ fmt.formatMicros(preview.premium.creditedMicros) }}</p>
+            </div>
             <p v-if="preview && preview.scale < 1" class="flex items-start gap-2 rounded-xl bg-orange-soft px-4 py-3 text-sm font-semibold text-orange">
               <TriangleAlert class="mt-0.5 h-4 w-4 shrink-0" />
               {{ t("admin.settlement.capApplied", { pct: Math.round(preview.scale * 1000) / 10, share: preview.sharePct }) }}
@@ -284,7 +292,10 @@ const platformMicros = computed(() => {
               <tr v-for="c in overview.closed" :key="c.month">
                 <td class="py-2.5 pr-3 font-semibold first-letter:uppercase text-contrast">{{ monthLabel(c.month) }}</td>
                 <td class="py-2.5 pr-3 text-right text-primary">{{ fmt.formatCount(c.views) }}</td>
-                <td class="py-2.5 pr-3 text-right font-bold text-contrast">{{ fmt.formatMicros(c.creditedMicros) }}</td>
+                <td class="py-2.5 pr-3 text-right font-bold text-contrast">
+                  {{ fmt.formatMicros(c.creditedMicros + c.premiumCreditedMicros) }}
+                  <span v-if="c.premiumCreditedMicros" class="block text-xs font-semibold text-premium">{{ t("admin.settlement.premiumPart", { amount: fmt.formatMicros(c.premiumCreditedMicros) }) }}</span>
+                </td>
                 <td class="py-2.5">
                   <span class="flex flex-wrap justify-end gap-1.5">
                     <UiBadge v-if="c.legacy" :dot="false">{{ t("admin.settlement.legacy") }}</UiBadge>

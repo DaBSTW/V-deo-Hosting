@@ -1,15 +1,18 @@
 import { isPublicVideoId } from "#shared/lib/ids";
 import { localeFromRequest, translatorFor } from "#srv/i18n";
-import { handler, methods } from "#srv/http";
+import { handler, methods, type ApiRequest } from "#srv/http";
 import { clientIp, rateLimit } from "#srv/rate-limit";
-import { verifyMediaToken, type MediaAsset } from "#srv/videos/playback-token";
+import { verifyDownloadTicket, verifyMediaToken, type MediaAsset } from "#srv/videos/playback-token";
 import { prisma } from "#srv/prisma";
 import { SESSION_COOKIE, verifySession } from "#srv/auth/jwt";
 import { resolveDownload, resolveMediaUrl } from "#srv/videos/service";
 import { getMonetizationSettings } from "#srv/monetization/settings";
-import { recordPaidView, recordView } from "#srv/videos/stats-buffer";
+import { recordPaidView, recordPremiumView, recordView } from "#srv/videos/stats-buffer";
+import { getPremiumSettings } from "#srv/premium/settings";
+import { premiumFromCookieHeader } from "#srv/premium/token";
+import { gatewayUrl } from "#srv/videos/download-gateway";
 
-const ASSETS = new Set<MediaAsset>(["source", "poster", "download"]);
+const ASSETS = new Set<MediaAsset>(["source", "poster"]);
 
 const redirect = (target: string, cacheControl: string) =>
   new Response(null, {
@@ -30,6 +33,7 @@ const GET = handler(async (req) => {
   {
     const { publicId, asset } = req.params;
     const q = req.nextUrl.searchParams;
+    if (asset === "download") return download(req, publicId, q, t);
     const variant = q.get("q") ?? "";
     if (
       !isPublicVideoId(publicId) ||
@@ -39,16 +43,6 @@ const GET = handler(async (req) => {
       return text(t("media.invalidLink"), 403);
     }
 
-    if (asset === "download") {
-      rateLimit(`download:${clientIp(req)}`, 30, 60_000);
-      const result = await resolveDownload(publicId, variant);
-      if (!result || result.status === "unavailable") {
-        return text(t("media.downloadUnavailable"), 404);
-      }
-      if (result.status === "preparing") return preparingPage(t);
-      return redirect(result.url, "private, no-store");
-    }
-
     const target = await resolveMediaUrl(publicId, asset as "source" | "poster");
     if (!target) return text(t("media.notFound"), 404);
     // Las miniaturas se repiten mucho en el dashboard: caché corta de la redirección.
@@ -56,18 +50,43 @@ const GET = handler(async (req) => {
   }
 });
 
-/** El proveedor está generando el MP4: página mínima que reintenta sola. */
-function preparingPage(t: ReturnType<typeof translatorFor>) {
+/**
+ * GET /media/:publicId/download?q=&nb=&t=&e=&s= — canje del ticket de descarga.
+ * Antes de `nb` no vale (la espera de los gratuitos se impone aquí, no en el
+ * navegador). Premium → URL directa del proveedor; gratuito → Worker con
+ * velocidad limitada (o directa si el Worker no está configurado).
+ */
+async function download(req: ApiRequest, publicId: string, q: URLSearchParams, t: ReturnType<typeof translatorFor>) {
+  if (!isPublicVideoId(publicId)) return text(t("media.invalidLink"), 403);
+  const ticket = verifyDownloadTicket(publicId, q);
+  // Enlaces antiguos o manipulados: a la página del video, donde está el botón.
+  if (!ticket) return redirect(`/v/${publicId}`, "private, no-store");
+  const wait = ticket.notBefore - Math.floor(Date.now() / 1000);
+  if (wait > 0) return statusPage(t, t("media.waitTitle"), t("media.wait", { seconds: wait }), wait, 425);
+
+  rateLimit(`download:${clientIp(req)}`, 30, 60_000);
+  const result = await resolveDownload(publicId, ticket.optionId);
+  if (!result || result.status === "unavailable") return text(t("media.downloadUnavailable"), 404);
+  if (result.status === "preparing") return statusPage(t, t("media.preparingTitle"), t("media.preparing"), 15, 202, t("media.preparingHint"));
+  if (ticket.tier === "f") {
+    const throttled = gatewayUrl(result.url, (await getPremiumSettings()).freeDownloadKbps);
+    if (throttled) return redirect(throttled, "private, no-store");
+  }
+  return redirect(result.url, "private, no-store");
+}
+
+/** Página mínima que se recarga sola (espera del ticket o MP4 en preparación). */
+function statusPage(t: ReturnType<typeof translatorFor>, title: string, message: string, refreshSec: number, status: number, hint?: string) {
   const esc = (v: string) => v.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
   const html = `<!doctype html><html lang="${t("media.lang")}"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="15">
-<title>${esc(t("media.preparingTitle"))}</title><style>
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="${refreshSec}">
+<title>${esc(title)}</title><style>
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:#16181c;color:#fff;font:600 15px Inter,system-ui,sans-serif;text-align:center}
 .s{width:28px;height:28px;margin:0 auto 16px;border:3px solid #34363c;border-top-color:#1bd96a;border-radius:50%;animation:r 1s linear infinite}
 @keyframes r{to{transform:rotate(360deg)}}p{color:#96a2b0;font-weight:400;font-size:13px}</style></head>
-<body><div><div class="s"></div>${esc(t("media.preparing"))}<p>${esc(t("media.preparingHint"))}</p></div></body></html>`;
+<body><div><div class="s"></div>${esc(message)}${hint ? `<p>${esc(hint)}</p>` : ""}</div></body></html>`;
   return new Response(html, {
-    status: 202,
+    status,
     headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
   });
 }
@@ -102,6 +121,13 @@ const POST = handler(async (req) => {
 
   if (q.get("stage") === "q") {
     const settings = await getMonetizationSettings();
+    // Espectador Premium (pase firmado en cookie, sin DB): no ve anuncios; su
+    // vista cuenta para el reparto de los ingresos de Premium.
+    const pass = premiumFromCookieHeader(req.headers.get("cookie"));
+    if (pass) {
+      if (settings.enabled) recordPremiumView(publicId, pass.userId, settings.perIpDailyCap);
+      return new Response(null, { status: 204 });
+    }
     // Sin código de anuncios no hay ingresos que repartir: no se paga la vista.
     if (settings.enabled && settings.monetagPlayerSnippet.trim() && q.get("ad") === "1") {
       // País por Cloudflare (CF-IPCountry); sin Cloudflare delante cae en Nivel 3.

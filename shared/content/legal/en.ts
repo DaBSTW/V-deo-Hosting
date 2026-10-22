@@ -68,40 +68,56 @@ export function legalDocsEn(o: OperatorInfo): Record<LegalSlug, LegalDoc> {
           ],
         },
         {
-          title: "8. Suspension and termination",
+          title: "8. Premium subscription",
+          blocks: [
+            `Premium is an optional paid subscription for viewers: ad-free playback on ${o.app}, downloads without the ${o.freeDownloadWaitSec}-second wait and without a speed limit. Prices: ${o.premiumMonthlyUsd.toFixed(2)} USD per month or ${o.premiumYearlyUsd.toFixed(2)} USD per year, including applicable taxes unless the checkout page says otherwise.`,
+            {
+              list: [
+                "Payments are processed by PayPal. We do not store your card or PayPal account details; only the subscription and payment identifiers.",
+                "The subscription renews automatically at the end of each period until you cancel it. You can cancel at any time from your dashboard or from PayPal; you keep the benefits until the end of the period you already paid for.",
+                "Unless the law of your country provides otherwise, periods that have already started are not refunded. If a payment is refunded or reversed, the related benefits end.",
+                "We may change the price with prior notice; the new price only applies to new subscriptions or from the next renewal after the notice.",
+                "In players embedded on other websites, the benefits depend on your browser allowing the Premium cookie; if it blocks it, the player behaves as for a free user.",
+                `${o.premiumSharePct}% of the net Premium revenue is shared among creators according to the subscriber views their videos receive, under the Monetization Program Terms.`,
+              ],
+            },
+          ],
+        },
+        {
+          title: "9. Suspension and termination",
           blocks: [
             "You may stop using the service and delete your content at any time. We may suspend or terminate your account if you violate these Terms, if the law requires it, or if your use puts the service or others at risk. In cases of fraud, pending earnings may be withheld under the Monetization Program Terms.",
           ],
         },
         {
-          title: "9. Disclaimer of warranties",
+          title: "10. Disclaimer of warranties",
           blocks: [
             "The service is provided “as is” and “as available”. To the extent permitted by law, we do not guarantee that it will be uninterrupted or error-free, or that stored content cannot be lost. We recommend keeping copies of your original files.",
           ],
         },
         {
-          title: "10. Limitation of liability",
+          title: "11. Limitation of liability",
           blocks: [
             "To the extent permitted by law, we are not liable for indirect damages, lost profits, data loss or damages arising from user content. Our total liability to you will not exceed the greater of the amount you paid us in the last 12 months or USD 100. Nothing here limits liability that cannot be limited by law.",
           ],
         },
         {
-          title: "11. Indemnity",
+          title: "12. Indemnity",
           blocks: ["You agree to hold us harmless from third-party claims arising from the content you upload or from your breach of these Terms."],
         },
         {
-          title: "12. Governing law",
+          title: "13. Governing law",
           blocks: [
             `These Terms are governed by the laws${where}. Any dispute will be submitted to the competent courts of that jurisdiction, without prejudice to the rights granted to you by the consumer protection laws of your country of residence.`,
           ],
         },
         {
-          title: "13. Changes",
+          title: "14. Changes",
           blocks: [
             "We may update these Terms. If the changes are significant, we will notify you through the service or by email before they take effect. If you keep using the service afterwards, you accept the new version.",
           ],
         },
-        { title: "14. Contact", blocks: [`For any questions about these Terms: ${o.email}.`] },
+        { title: "15. Contact", blocks: [`For any questions about these Terms: ${o.email}.`] },
       ],
     },
 
@@ -153,6 +169,7 @@ export function legalDocsEn(o: OperatorInfo): Record<LegalSlug, LegalDoc> {
                 "The provider of the server that hosts the platform and its database.",
                 "Advertising networks (such as Monetag), which may process data about viewers of public pages under their own privacy policies.",
                 "Payment providers (such as PayPal, Payoneer, cryptocurrency networks or your bank) to send you your earnings.",
+                "PayPal, to charge the Premium subscription. PayPal processes your payment data as an independent controller under its own privacy policy; we only receive the subscription status and the amount of each payment.",
                 "Authorities, when required by law.",
               ],
             },
@@ -205,6 +222,7 @@ export function legalDocsEn(o: OperatorInfo): Record<LegalSlug, LegalDoc> {
             {
               list: [
                 "vh_session: keeps you signed in. Strictly necessary; lasts 7 days.",
+                "dp: signed pass that tells whether your account is Premium, so you don't see ads or waits (also in embedded players). Lasts at most 3 days and renews itself.",
                 "NEXT_LOCALE: remembers the language you chose. Lasts 1 year.",
               ],
             },
@@ -357,6 +375,7 @@ export function legalDocsEn(o: OperatorInfo): Record<LegalSlug, LegalDoc> {
             `The total shared with creators in a month never exceeds ${o.revenueSharePct}% of the revenue we actually receive from the ad network for that month; if it would, every credit for that month is reduced by the same proportion. Estimates shown in your dashboard during the month are indicative and not a guaranteed amount.`,
             "We may change the revenue share percentage with advance notice; the change only applies to months closed afterwards.",
             "A view is monetized when the viewer plays the video for the minimum time shown in your dashboard without an ad blocker. Only one view per person and video every 24 hours counts, there is a daily limit per person, and bots and your own plays are excluded.",
+            `Premium subscribers: they don't see ads, so their views generate no RPM revenue. Instead, when each month is closed we share ${o.premiumSharePct}% of the net Premium revenue attributable to that month (after PayPal fees; the yearly plan is spread evenly over its 12 months) in proportion to the full subscriber views each creator received, with the same minimum-duration and anti-fraud rules.`,
           ],
         },
         {

@@ -196,8 +196,11 @@ const methodCfg = (m: PayoutMethod) => {
       <DashKpi :icon="Lock" :label="t('admin.paidMonth')" :value="fmt.formatMicros(summary.paidThisMonthMicros)" />
     </div>
 
-    <!-- Verificaciones de identidad -->
     <DashAdminSettlement :share="settings.revenueSharePct" @closed="refreshSummary" />
+
+    <DashAdminPremium />
+
+    <!-- Verificaciones de identidad -->
 
     <DashCard :title="t('admin.kycTitle')" :subtitle="t('admin.kycSubtitle')">
       <UiEmptyState v-if="kyc.length === 0" :icon="ShieldCheck" :title="t('admin.kycEmpty')" class="!py-8" />

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** /dashboard — panel del usuario (requiere sesión; lo protege el middleware del servidor). */
-import { ChartNoAxesColumn, CircleDollarSign, Folder, Inbox, Library, ShieldCheck, Upload, X } from "lucide-vue-next";
+import { ChartNoAxesColumn, CircleDollarSign, Crown, Folder, Inbox, Library, ShieldCheck, Upload, X } from "lucide-vue-next";
 import { DRAG_MIME, createDashboard, type DashboardInitial, type PublicVideo } from "~/composables/useDashboard";
 
 const { t } = useI18n();
@@ -77,7 +77,7 @@ function onDrop(e: DragEvent) {
 const drawer = useState("dash-drawer", () => false);
 onBeforeUnmount(() => (drawer.value = false));
 const currentFolder = computed(() => d.folders.value.find((f) => f.id === currentFolderId.value));
-const isPanel = computed(() => ["overview", "monetization", "admin"].includes(d.filter.value.kind));
+const isPanel = computed(() => ["overview", "monetization", "premium", "admin"].includes(d.filter.value.kind));
 const title = computed(() => (d.filter.value.kind === "folder" ? (currentFolder.value?.name ?? "") : t.dynamic(`dashboard.titles.${d.filter.value.kind}`)));
 const libraryCount = computed(() => {
   const f = d.filter.value;
@@ -87,7 +87,7 @@ const libraryCount = computed(() => {
   return 0;
 });
 const icon = computed(
-  () => ({ overview: ChartNoAxesColumn, monetization: CircleDollarSign, admin: ShieldCheck, all: Library, none: Inbox, folder: Folder })[d.filter.value.kind],
+  () => ({ overview: ChartNoAxesColumn, monetization: CircleDollarSign, premium: Crown, admin: ShieldCheck, all: Library, none: Inbox, folder: Folder })[d.filter.value.kind],
 );
 </script>
 
@@ -113,6 +113,7 @@ const icon = computed(
         </div>
 
         <DashMonetizationView v-if="d.filter.value.kind === 'monetization'" />
+        <DashPremiumView v-else-if="d.filter.value.kind === 'premium'" />
         <DashAdminView v-else-if="d.filter.value.kind === 'admin'" />
         <DashOverview v-else-if="d.filter.value.kind === 'overview'" />
         <DashLibrary v-else />

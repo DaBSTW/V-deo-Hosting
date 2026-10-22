@@ -4,6 +4,7 @@ import { burnPasswordCheck, verifyPassword } from "#srv/auth/password";
 import { credentialsSchema } from "#srv/auth/schemas";
 import { HttpError, handler, json, methods, readJson } from "#srv/http";
 import { clientIp, rateLimit } from "#srv/rate-limit";
+import { premiumCookieHeader } from "#srv/premium/token";
 
 const POST = handler(async (req) => {
   const { email, password } = credentialsSchema.parse(await readJson(req));
@@ -16,7 +17,9 @@ const POST = handler(async (req) => {
     : await burnPasswordCheck(password).then(() => false);
   if (!user || !valid) throw new HttpError(401, "invalidCredentials");
 
-  return withSessionCookie(json({ ok: true }), await signSession({ sub: user.id, email: user.email }));
+  const res = withSessionCookie(json({ ok: true }), await signSession({ sub: user.id, email: user.email }));
+  res.headers.append("Set-Cookie", premiumCookieHeader(user.id, user.premiumUntil));
+  return res;
 });
 
 export default methods({ POST });

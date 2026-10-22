@@ -15,12 +15,19 @@
  * coinciden exactamente con nuestras vistas monetizadas. Si se indica lo que
  * Monetag pagó en total ese mes, el reparto nunca supera `reparto % × ingresos`
  * (si lo superara, todos los créditos se escalan en proporción).
+ *
+ * Premium: los suscriptores no ven anuncios, así que sus vistas no entran en
+ * el cálculo por RPM. Se reparte aparte el `premiumSharePct` de los ingresos
+ * NETOS de Premium del mes (el anual, prorrateado 1/12 por mes) en proporción
+ * a las vistas completas de suscriptores que tuvo cada creador.
  */
 import { Prisma } from "@prisma/client";
 import { prisma } from "#srv/prisma";
 import { HttpError } from "../http";
 import { flushStats } from "../videos/stats-buffer";
 import { getMonetizationSettings } from "./settings";
+import { getPremiumSettings } from "../premium/settings";
+import { amortizedPremiumRevenue } from "../premium/service";
 
 export const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 export const COUNTRY_RE = /^[A-Z]{2}$/;
@@ -58,6 +65,16 @@ export interface SettlementPreview {
   /** Factor aplicado por el tope (1 = sin recorte). */
   scale: number;
   creators: number;
+  premium: {
+    /** Ingresos netos de Premium imputados al mes. */
+    revenueMicros: number;
+    sharePct: number;
+    /** Bolsa para los creadores (ingresos × reparto %). */
+    poolMicros: number;
+    views: number;
+    creditedMicros: number;
+    creators: number;
+  };
 }
 
 /** Vistas monetizadas del mes agrupadas por país (y nº de creadores). */
@@ -103,6 +120,19 @@ async function compute(month: string, input: SettlementInput, sharePct: number) 
     byCountry.set(c.country, row);
   }
   const rows = [...byCountry.values()].sort((a, b) => b.views - a.views);
+
+  // --- Bolsa de Premium, en proporción a las vistas de suscriptores.
+  const [premiumRevenue, premiumSettings, premiumViews] = await Promise.all([
+    amortizedPremiumRevenue(month),
+    getPremiumSettings(),
+    prisma.$queryRaw<{ userId: string; views: bigint }[]>`
+      SELECT "userId", SUM("views") AS views FROM "PremiumViewDaily"
+      WHERE "day" >= ${from}::date AND "day" < ${to}::date GROUP BY "userId"`,
+  ]);
+  const premiumSharePct = premiumSettings.premiumSharePct;
+  const pool = Math.floor((premiumRevenue * premiumSharePct) / 100);
+  const pViews = premiumViews.reduce((sum, r) => sum + num(r.views), 0);
+  const premiumCredits = premiumViews.map((r) => ({ userId: r.userId, views: num(r.views), amount: pViews ? Math.floor((pool * num(r.views)) / pViews) : 0 }));
   const preview: SettlementPreview = {
     month,
     sharePct,
@@ -113,8 +143,16 @@ async function compute(month: string, input: SettlementInput, sharePct: number) 
     capMicros,
     scale,
     creators: new Set(credits.map((c) => c.userId)).size,
+    premium: {
+      revenueMicros: premiumRevenue,
+      sharePct: premiumSharePct,
+      poolMicros: pool,
+      views: pViews,
+      creditedMicros: premiumCredits.reduce((sum, c) => sum + c.amount, 0),
+      creators: premiumCredits.length,
+    },
   };
-  return { preview, credits };
+  return { preview, credits, premiumCredits };
 }
 
 /** Resumen para el panel: meses cerrados, meses pendientes de cerrar y el mes en curso. */
@@ -122,9 +160,13 @@ export async function listSettlements() {
   await flushStats();
   const [closed, months] = await Promise.all([
     prisma.revenueSettlement.findMany({ orderBy: { month: "desc" }, take: 24 }),
+    // Meses con vistas monetizadas o vistas de suscriptores Premium (o ambas).
     prisma.$queryRaw<{ month: string; views: bigint }[]>`
-      SELECT to_char("day", 'YYYY-MM') AS month, SUM("views") AS views
-      FROM "MonetizedViewDaily" GROUP BY 1 ORDER BY 1 DESC LIMIT 24`,
+      SELECT month, SUM(views) AS views FROM (
+        SELECT to_char("day", 'YYYY-MM') AS month, "views" FROM "MonetizedViewDaily"
+        UNION ALL
+        SELECT to_char("day", 'YYYY-MM') AS month, 0 AS views FROM "PremiumViewDaily"
+      ) m GROUP BY 1 ORDER BY 1 DESC LIMIT 24`,
   ]);
   const closedSet = new Set(closed.map((c) => c.month));
   const cur = currentMonth();
@@ -143,6 +185,8 @@ export async function listSettlements() {
       revenueMicros: c.revenueMicros == null ? null : num(c.revenueMicros),
       scale: c.scale,
       legacy: c.legacy,
+      premiumCreditedMicros: num(c.premiumCreditedMicros),
+      premiumViews: c.premiumViews,
       closedAt: c.closedAt.toISOString(),
       closedBy: c.closedBy,
     })),
@@ -170,6 +214,10 @@ export async function getSettlementMonth(month: string) {
           creditedMicros: num(closed.creditedMicros),
           scale: closed.scale,
           legacy: closed.legacy,
+          premiumRevenueMicros: num(closed.premiumRevenueMicros),
+          premiumSharePct: closed.premiumSharePct,
+          premiumViews: closed.premiumViews,
+          premiumCreditedMicros: num(closed.premiumCreditedMicros),
           closedAt: closed.closedAt.toISOString(),
         }
       : null,
@@ -191,7 +239,8 @@ export async function closeSettlement(month: string, input: SettlementInput, adm
   if (month >= currentMonth()) throw new HttpError(400, "monthNotFinished");
   await flushStats();
   const settings = await getMonetizationSettings();
-  const { preview, credits } = await compute(month, input, settings.revenueSharePct);
+  const { preview, credits, premiumCredits } = await compute(month, input, settings.revenueSharePct);
+  const premiumRpm = preview.premium.views ? Math.floor((preview.premium.poolMicros * 1000) / preview.premium.views) : 0;
   try {
     await prisma.$transaction([
       prisma.revenueSettlement.create({
@@ -204,13 +253,23 @@ export async function closeSettlement(month: string, input: SettlementInput, adm
           scale: preview.scale,
           views: preview.views,
           creditedMicros: BigInt(preview.creditedMicros),
+          premiumRevenueMicros: BigInt(preview.premium.revenueMicros),
+          premiumSharePct: preview.premium.sharePct,
+          premiumViews: preview.premium.views,
+          premiumCreditedMicros: BigInt(preview.premium.creditedMicros),
           closedBy: adminEmail,
         },
       }),
       prisma.earningCredit.createMany({
         data: credits
           .filter((c) => c.amount > 0)
-          .map((c) => ({ userId: c.userId, month, country: c.country, views: c.views, rpmMicros: BigInt(c.rpmMicros), amountMicros: BigInt(c.amount) })),
+          .map((c) => ({ userId: c.userId, month, source: "ADS", country: c.country, views: c.views, rpmMicros: BigInt(c.rpmMicros), amountMicros: BigInt(c.amount) }))
+          // Premium: sin país ("ZZ"); el «RPM» es lo que valió cada 1.000 vistas de suscriptores.
+          .concat(
+            premiumCredits
+              .filter((c) => c.amount > 0)
+              .map((c) => ({ userId: c.userId, month, source: "PREMIUM", country: "ZZ", views: c.views, rpmMicros: BigInt(premiumRpm), amountMicros: BigInt(c.amount) })),
+          ),
       }),
     ]);
   } catch (err) {

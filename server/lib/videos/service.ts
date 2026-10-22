@@ -21,9 +21,10 @@ import type {
   WebhookRequest,
 } from "../video-providers/types";
 import { toPublicVideo, type PublicVideo } from "./dto";
-import { mediaPath } from "./playback-token";
+import { downloadTicketPath, mediaPath } from "./playback-token";
 import { recordDownload } from "./stats-buffer";
 import { getMonetizationSettings } from "../monetization/settings";
+import { getPremiumSettings } from "../premium/settings";
 
 /** Reutilización de URLs firmadas: una vista = render + source + poster. */
 const PLAYBACK_CACHE_MS = 60_000;
@@ -363,11 +364,11 @@ export type EmbedLookup =
     };
 
 export interface PublicDownloadOption {
+  /** Calidad elegida; se canjea por un ticket en POST /api/public/videos/:id/download. */
+  id: string;
   kind: "original" | "rendition" | "single";
   height: number | null;
   sizeBytes: number | null;
-  /** Ruta propia firmada: `/media/<id>/download?q=<calidad>&…` */
-  path: string;
 }
 
 const downloadsEnabled = (v: Video) => v.allowDownload && getCoreEnv().ALLOW_DOWNLOADS;
@@ -376,7 +377,7 @@ const downloadsEnabled = (v: Video) => v.allowDownload && getCoreEnv().ALLOW_DOW
  * Datos para el reproductor. Las URLs devueltas son rutas PROPIAS firmadas
  * (`/media/...`); la URL real del proveedor solo se resuelve al pedirlas.
  */
-export async function getEmbedPlayback(publicId: string): Promise<EmbedLookup> {
+export async function getEmbedPlayback(publicId: string, viewer: { premium: boolean } = { premium: false }): Promise<EmbedLookup> {
   const video = await prisma.video.findUnique({
     where: { publicId },
     include: { user: { select: { monetizationEnabled: true } } },
@@ -391,7 +392,7 @@ export async function getEmbedPlayback(publicId: string): Promise<EmbedLookup> {
   const downloads = downloadsEnabled(video)
     ? getAdapter(video.provider)
         .listDownloadOptions(refOf(video), Number(video.sizeBytes))
-        .map((o) => ({ kind: o.kind, height: o.height ?? null, sizeBytes: o.sizeBytes ?? null, path: mediaPath(publicId, "download", o.id) }))
+        .map((o) => ({ id: o.id, kind: o.kind, height: o.height ?? null, sizeBytes: o.sizeBytes ?? null }))
     : [];
   return {
     state: "ready",
@@ -400,7 +401,8 @@ export async function getEmbedPlayback(publicId: string): Promise<EmbedLookup> {
     viewUrl: mediaPath(publicId, "view"),
     monetization:
       mon.enabled && video.user.monetizationEnabled
-        ? { qualifyAfterSec: mon.minWatchSeconds, adSnippet: mon.monetagPlayerSnippet }
+        ? // Premium: sin anuncios, pero el aviso de «vista completa» sigue (cuenta para el reparto de Premium).
+          { qualifyAfterSec: mon.minWatchSeconds, adSnippet: viewer.premium ? "" : mon.monetagPlayerSnippet }
         : null,
     title: video.title,
     durationSec: video.durationSec,
@@ -423,6 +425,20 @@ async function providerPlayback(video: Video): Promise<PlaybackSource> {
   if (playbackCache.size > 5_000) playbackCache.clear();
   playbackCache.set(key, { source, until: Date.now() + PLAYBACK_CACHE_MS });
   return source;
+}
+
+/**
+ * Ticket de descarga para una calidad. Los gratuitos esperan
+ * `freeDownloadWaitSec` (impuesto en el servidor con `notBefore`); Premium, nada.
+ */
+export async function createDownloadTicket(publicId: string, optionId: string, premium: boolean) {
+  const video = await prisma.video.findUnique({ where: { publicId } });
+  if (!video || video.status !== "READY" || !downloadsEnabled(video)) throw new HttpError(404, "downloadUnavailable");
+  const options = getAdapter(video.provider).listDownloadOptions(refOf(video), Number(video.sizeBytes));
+  if (!options.some((o) => o.id === optionId)) throw new HttpError(400, "invalidData");
+  const waitSec = premium ? 0 : (await getPremiumSettings()).freeDownloadWaitSec;
+  const notBefore = Math.floor(Date.now() / 1000) + waitSec;
+  return { url: downloadTicketPath(publicId, optionId, notBefore, premium ? "p" : "f"), waitSec };
 }
 
 /** Resuelve la descarga: URL directa del proveedor (el VPS solo redirige). */

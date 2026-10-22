@@ -115,7 +115,14 @@ workers/r2-event-forwarder               (opcional) Worker: eventos R2 → webho
 | `DELETE` | `/api/folders/:id`           | Borra la carpeta; sus videos pasan a «Sin carpeta» |
 | `DELETE` | `/api/videos/:publicId`      | Borra los archivos remotos (vía adaptador) y el registro local |
 | `POST`   | `/api/webhooks/cloudflare`   | Receptor genérico (Stream: `Webhook-Signature`; R2: `X-R2-Event-Signature`) |
-| `GET`    | `/media/:publicId/:asset`    | `source` \| `poster` \| `download?q=<calidad>`: pasarela firmada → `302` |
+| `GET`    | `/media/:publicId/:asset`    | `source` \| `poster`: pasarela firmada → `302`. `download?q=&nb=&t=`: canje del ticket de descarga |
+| `POST`   | `/api/public/videos/:publicId/download` | `{ option }` → `{ url, waitSec }`: ticket de descarga (gratis: espera; Premium: inmediato) |
+| `GET`    | `/api/premium`               | Planes y ventajas (público) + estado Premium del usuario |
+| `POST`   | `/api/premium/checkout`      | `{ plan: "MONTHLY" \| "YEARLY" }` → `{ approveUrl }` de PayPal |
+| `POST`   | `/api/premium/sync`          | `{ subscriptionId? }` → relee la suscripción en PayPal y renueva el pase Premium |
+| `POST`   | `/api/premium/cancel`        | Cancela la renovación (se conserva el periodo pagado) |
+| `POST`   | `/api/webhooks/paypal`       | Avisos de PayPal: solo disparan una relectura de la suscripción |
+| `GET`/`PUT`/`POST` | `/api/admin/premium` | (admin) Ajustes, resumen y acciones `syncPlans` / `syncAll` |
 
 `upload` es una instrucción genérica, igual sea cual sea el proveedor:
 
@@ -335,14 +342,61 @@ por método, pero no bajarlo de 25.
 * Indica siempre los ingresos totales al cerrar: es lo que garantiza que nunca repartes más de lo que cobras.
 * No anuncies importes fijos («$1,50 por cada 1.000 vistas»): el RPM real cambia cada mes y por país.
 
+## Premium (suscripción sin anuncios)
+
+Suscripción opcional para **espectadores**, cobrada con **PayPal** (mensual 4,99 $ o anual 39,99 $, editables):
+
+* **Sin anuncios**: con Premium, `/v` y `/embed` no insertan el código de Monetag.
+* **Descargar sin esperar**: los gratuitos ven una cuenta atrás de 30 s en el propio botón (si hay
+  varias calidades, empieza al elegirla). La espera la impone el servidor: el ticket de descarga
+  (`/media/<id>/download?nb=…`) no vale antes de tiempo y el nivel (`t=f|p`) va firmado.
+* **Velocidad sin límite**: las descargas gratuitas pasan por el Worker `workers/download-gateway`,
+  que las limita (500 KB/s por defecto); las Premium van directas al proveedor.
+* **Se anuncia en toda la plataforma**: enlace en la cabecera y el pie, sección en la portada,
+  página `/premium`, tarjeta en la página del video, aviso durante la cuenta atrás y en el panel.
+  En los reproductores insertados en webs ajenas no se muestra publicidad de Premium.
+
+### Sin cargar el VPS
+
+* Saber si alguien es Premium **no consulta la DB**: la cookie `dp` lleva el usuario y una caducidad
+  firmados con HMAC (máx. 3 días). El middleware la renueva desde la DB una vez al día por usuario.
+* Ningún archivo pasa por el VPS: el limitador de velocidad es un Worker de Cloudflare (esperar entre
+  trozos no consume CPU) y las descargas Premium redirigen directo a R2/Stream.
+* Las vistas de suscriptores van al mismo búfer en memoria que el resto de estadísticas (una consulta
+  SQL extra por volcado, sea cual sea el volumen).
+
+### Puesta en marcha
+
+1. Crea una app REST en [developer.paypal.com](https://developer.paypal.com) y rellena
+   `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` y `PAYPAL_ENV` (`sandbox` para probar, `live` para cobrar).
+2. En **Administración → Premium**, revisa precios y pulsa **Crear / actualizar planes en PayPal**.
+   Un cambio de precio crea un plan nuevo; los suscriptores actuales siguen con el suyo.
+3. Añade el webhook `https://<tu dominio>/api/webhooks/paypal` en la app de PayPal (eventos
+   `BILLING.SUBSCRIPTION.*` y `PAYMENT.SALE.*`).
+4. (Opcional) Despliega `workers/download-gateway` y rellena `DOWNLOAD_GATEWAY_URL` / `DOWNLOAD_GATEWAY_SECRET`.
+
+La fuente de verdad siempre es la API de PayPal: el retorno del pago, los webhooks y el cron diario
+(`npm run premium:sync`) solo provocan una relectura. Un webhook falso no puede activar nada.
+`premiumUntil` = fin del periodo cobrado (o el próximo cobro si sigue activa) + 1 día de margen;
+al cancelar se conserva lo pagado y un reembolso lo retira.
+
+### Reparto con los creadores
+
+Los suscriptores no ven anuncios, así que sus vistas no generan RPM. Al cerrar cada mes se reparte el
+**50 %** (ajustable) de los ingresos **netos** de Premium imputables a ese mes (el anual, 1/12 por mes)
+entre los creadores, en proporción a las vistas completas de suscriptores (mismas reglas: tiempo mínimo,
+1 por suscriptor y video cada 24 h, tope diario). Aparece en la vista previa del cierre y como
+«incl. X de Premium» en las ganancias del creador.
+
 ## Página pública: descargar e insertar
 
 El enlace directo (`/v/<id>`) muestra, bajo el reproductor:
 
 * **Descargar**: si hay una sola calidad es un botón directo; si hay varias, un menú para elegir
-  (con el tamaño de cada una). El enlace apunta a `/media/<id>/download?q=<calidad>` (firmado; la
-  calidad no se puede manipular), que responde con un **302 a la descarga directa del proveedor**
-  con `Content-Disposition: attachment` y el nombre del video. **El archivo no pasa por el VPS.**
+  (con el tamaño de cada una). Al pulsar, el navegador pide un ticket firmado
+  (`POST /api/public/videos/<id>/download`); los gratuitos esperan la cuenta atrás (ver Premium).
+  El ticket responde con un **302 a la descarga del proveedor** (o al Worker limitador) con
+  `Content-Disposition: attachment` y el nombre del video. **El archivo no pasa por el VPS.**
 * **Insertar**: panel con el código `<iframe>` en versión adaptable o de tamaño fijo, listo para copiar.
 * **Copiar enlace**.
 
@@ -479,6 +533,7 @@ Tareas periódicas recomendadas (cron):
 
 ```cron
 0 4 * * *  cd /srv/dembed && docker compose run --rm hls-worker npx tsx --tsconfig scripts/tsconfig.json scripts/cleanup-stale-uploads.ts
+30 4 * * * cd /srv/dembed && docker compose run --rm hls-worker npx tsx --tsconfig scripts/tsconfig.json scripts/sync-premium.ts
 ```
 
 ---

@@ -25,4 +25,9 @@ export interface OperatorInfo {
   minPayoutUsd: number;
   /** Porcentaje del RPM real que se acredita a los creadores. */
   revenueSharePct: number;
+  /** Suscripción Premium: precios, espera de descarga gratuita y reparto a creadores. */
+  premiumMonthlyUsd: number;
+  premiumYearlyUsd: number;
+  freeDownloadWaitSec: number;
+  premiumSharePct: number;
 }

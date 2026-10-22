@@ -1,14 +1,14 @@
 <script setup lang="ts">
 /**
  * Botón del sistema de diseño. Colores: `brand` (acción principal), `standard`,
- * `red` (destructivo), `transparent` y `outline`. Con `to` es un enlace interno
+ * `red` (destructivo), `transparent`, `outline` y `premium` (degradado de Premium). Con `to` es un enlace interno
  * y con `href` uno externo.
  */
 import type { RouteLocationRaw } from "vue-router";
 
 const props = withDefaults(
   defineProps<{
-    color?: "brand" | "standard" | "red" | "transparent" | "outline" | "highlight";
+    color?: "brand" | "standard" | "red" | "transparent" | "outline" | "highlight" | "premium";
     size?: "sm" | "md" | "lg";
     to?: RouteLocationRaw;
     href?: string;
@@ -30,6 +30,7 @@ const colorCls = computed(
       brand: "bg-brand text-on-brand",
       standard: "bg-button text-contrast",
       red: "bg-red text-white",
+      premium: "bg-premium",
       highlight: "bg-brand-highlight text-brand",
       transparent: "bg-transparent text-primary hover:!bg-button hover:text-contrast",
       outline: "border border-divider bg-transparent text-contrast hover:!bg-button",

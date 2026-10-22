@@ -15,6 +15,7 @@ import { flushStats } from "../videos/stats-buffer";
 import { getMonetizationSettings, PAYOUT_METHOD_IDS, type PayoutMethod } from "./settings";
 import { currentMonth, lastCreatorRpm, monthRange } from "./settlement";
 import { getKycStatus } from "../kyc/service";
+import { getPremiumSettings } from "../premium/settings";
 
 const DAY = 86_400_000;
 const utcToday = () => {
@@ -46,7 +47,9 @@ export interface MonetizationOverview {
   canRequest: { ok: boolean; reason: PayoutBlockReason | null; minUsd: number | null; needsKyc: boolean };
   daily: { date: string; views: number }[];
   /** Últimos 6 meses: vistas y, si el mes está cerrado, lo acreditado. */
-  months: { month: string; views: number; amountMicros: number | null; status: "open" | "pending" | "credited" }[];
+  months: { month: string; views: number; amountMicros: number | null; premiumMicros: number; status: "open" | "pending" | "credited" }[];
+  /** Vistas completas de suscriptores Premium este mes (cuentan para la bolsa de Premium). */
+  premium: { currentViews: number; sharePct: number };
   /** Mes en curso por país, con el RPM para el creador del último cierre (si hay). */
   countries: { country: string; views: number; creatorRpmMicros: number | null }[];
   topVideos: { id: string; title: string; paidViews: number }[];
@@ -98,7 +101,7 @@ export async function getMonetizationOverview(userId: string): Promise<Monetizat
     prisma.$queryRaw<{ month: string; views: bigint }[]>`
       SELECT to_char("day", 'YYYY-MM') AS month, SUM("views") AS views FROM "MonetizedViewDaily"
       WHERE "userId" = ${userId} AND "day" >= ${sixStart}::date GROUP BY 1`,
-    prisma.earningCredit.groupBy({ by: ["month"], where: { userId, month: { in: months } }, _sum: { amountMicros: true, views: true } }),
+    prisma.earningCredit.groupBy({ by: ["month", "source"], where: { userId, month: { in: months } }, _sum: { amountMicros: true, views: true } }),
     prisma.revenueSettlement.findMany({ where: { month: { in: months } }, select: { month: true } }),
     prisma.monetizedViewDaily.groupBy({ by: ["country"], where: { userId, day: { gte: curStart } }, _sum: { views: true }, orderBy: { _sum: { views: "desc" } } }),
     prisma.$queryRaw<{ publicId: string; title: string; paid: bigint }[]>`
@@ -110,6 +113,10 @@ export async function getMonetizationOverview(userId: string): Promise<Monetizat
     prisma.payout.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: 25 }),
     lastCreatorRpm(),
   ]);
+  const [premiumCur, premiumSettings] = await Promise.all([
+    prisma.premiumViewDaily.aggregate({ where: { userId, day: { gte: curStart } }, _sum: { views: true } }),
+    getPremiumSettings(),
+  ]);
 
   const daily = Array.from({ length: 30 }, (_, i) => ({ date: iso(new Date(from.getTime() + i * DAY)), views: 0 }));
   const idx = new Map(daily.map((d, i) => [d.date, i]));
@@ -119,7 +126,15 @@ export async function getMonetizationOverview(userId: string): Promise<Monetizat
   }
 
   const closedSet = new Set(closed.map((c) => c.month));
-  const creditOf = new Map(credits.map((c) => [c.month, { amount: num(c._sum.amountMicros), views: num(c._sum.views) }]));
+  const creditOf = new Map<string, { amount: number; views: number; premium: number }>();
+  for (const c of credits) {
+    const cur = creditOf.get(c.month) ?? { amount: 0, views: 0, premium: 0 };
+    cur.amount += num(c._sum.amountMicros);
+    // Las vistas de la tabla son las de anuncios; Premium se muestra aparte.
+    if (c.source === "PREMIUM") cur.premium += num(c._sum.amountMicros);
+    else cur.views += num(c._sum.views);
+    creditOf.set(c.month, cur);
+  }
   const viewsOf = new Map(monthViews.map((m) => [m.month, num(m.views)]));
   const monthList = months
     .map((m) => ({
@@ -127,6 +142,7 @@ export async function getMonetizationOverview(userId: string): Promise<Monetizat
       // En meses cerrados manda lo acreditado (incluye los convertidos del modelo anterior).
       views: Math.max(viewsOf.get(m) ?? 0, creditOf.get(m)?.views ?? 0),
       amountMicros: closedSet.has(m) ? (creditOf.get(m)?.amount ?? 0) : null,
+      premiumMicros: creditOf.get(m)?.premium ?? 0,
       status: (closedSet.has(m) ? "credited" : m === cur ? "open" : "pending") as "open" | "pending" | "credited",
     }))
     // Meses pasados sin actividad no aportan nada a la tabla.
@@ -184,6 +200,7 @@ export async function getMonetizationOverview(userId: string): Promise<Monetizat
       createdAt: p.createdAt.toISOString(),
       processedAt: p.processedAt?.toISOString() ?? null,
     })),
+    premium: { currentViews: num(premiumCur._sum.views), sharePct: premiumSettings.premiumSharePct },
     rules: { minWatchSeconds: settings.minWatchSeconds, perIpDailyCap: settings.perIpDailyCap, sharePct: settings.revenueSharePct },
     methods: PAYOUT_METHOD_IDS.filter((m) => settings.payoutMethods[m]?.enabled).map((m) => ({
       id: m,

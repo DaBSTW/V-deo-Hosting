@@ -54,6 +54,11 @@ model User {
   /// Destino del cobro (email de PayPal, dirección de wallet…).
   payoutDetails       String?
   monetizedViews      MonetizedViewDaily[]
+  premiumViews        PremiumViewDaily[]
+  /// Premium (sin anuncios, descargas sin espera ni límite) hasta esta fecha.
+  /// Se calcula a partir de los pagos: último pago + periodo del plan + 1 día de gracia.
+  premiumUntil        DateTime?
+  subscriptions       Subscription[]
   earningCredits      EarningCredit[]
   payouts             Payout[]
   /// Estado de la verificación de identidad (requisito para cobrar).
@@ -161,31 +166,39 @@ model MonetizedViewDaily {
 /// para los creadores. Un mes solo se cierra una vez.
 model RevenueSettlement {
   /// "AAAA-MM" (UTC)
-  month            String   @id @db.VarChar(7)
+  month                 String   @id @db.VarChar(7)
   /// Porcentaje del RPM real que se acredita a los creadores.
-  sharePct         Int
+  sharePct              Int
   /// { "MX": 1500000, … } micro-USD por 1.000 vistas.
-  rpmByCountry     Json
+  rpmByCountry          Json
   /// RPM para los países sin valor propio.
-  defaultRpmMicros BigInt
+  defaultRpmMicros      BigInt
   /// Ingresos totales reportados por Monetag (tope opcional del reparto).
-  revenueMicros    BigInt?
+  revenueMicros         BigInt?
   /// Factor aplicado si el reparto superaba el tope (1 = sin recorte).
-  scale            Float    @default(1)
-  views            Int
-  creditedMicros   BigInt
+  scale                 Float    @default(1)
+  views                 Int
+  creditedMicros        BigInt
   /// Ganancias del modelo anterior (tarifa fija) convertidas al migrar.
-  legacy           Boolean  @default(false)
-  closedBy         String?
-  closedAt         DateTime @default(now())
+  legacy                Boolean  @default(false)
+  /// Fondo de suscripciones del mes: neto reconocido × porcentaje para creadores.
+  premiumRevenueMicros  BigInt   @default(0)
+  premiumSharePct       Int      @default(0)
+  premiumViews          Int      @default(0)
+  premiumCreditedMicros BigInt   @default(0)
+  closedBy              String?
+  closedAt              DateTime @default(now())
 }
 
-/// Importe acreditado a un creador al cerrar un mes (por país).
+/// Importe acreditado a un creador al cerrar un mes: por país (anuncios) o
+/// por su parte del fondo de suscripciones (premium, país "ZZ").
 model EarningCredit {
   id           String   @id @default(cuid())
   userId       String
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   month        String   @db.VarChar(7)
+  /// ADS (RPM real de anuncios) | PREMIUM (reparto de las suscripciones)
+  source       String   @default("ADS") @db.VarChar(8)
   country      String   @db.VarChar(2)
   views        Int
   /// RPM real aplicado (micro-USD por 1.000 vistas).
@@ -193,8 +206,67 @@ model EarningCredit {
   amountMicros BigInt
   createdAt    DateTime @default(now())
 
-  @@unique([userId, month, country])
+  @@unique([userId, month, source, country])
   @@index([month])
+}
+
+/// Vistas de usuarios premium (sin anuncios) por creador y día: base del
+/// reparto del fondo de suscripciones.
+model PremiumViewDaily {
+  userId String
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  day    DateTime @db.Date
+  views  Int      @default(0)
+
+  @@id([userId, day])
+  @@index([day])
+}
+
+/// Suscripción premium (pasarela: PayPal). El acceso premium NO depende del
+/// estado, sino de los pagos completados (ver SubscriptionPayment).
+model Subscription {
+  id                     String                @id @default(cuid())
+  userId                 String
+  user                   User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider               String                @default("PAYPAL") @db.VarChar(16)
+  /// Id de la suscripción en la pasarela (p. ej. "I-ABC123").
+  providerSubscriptionId String                @unique
+  /// MONTHLY | YEARLY
+  plan                   String                @db.VarChar(16)
+  /// Estado en la pasarela: APPROVAL_PENDING, ACTIVE, SUSPENDED, CANCELLED, EXPIRED…
+  status                 String                @db.VarChar(24)
+  /// Próximo cobro según la pasarela (vacío si está cancelada).
+  nextBillingAt          DateTime?
+  cancelledAt            DateTime?
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  payments               SubscriptionPayment[]
+
+  @@index([userId, createdAt])
+  @@index([status])
+}
+
+/// Cobro de una suscripción (transacción de la pasarela). Idempotente por id.
+model SubscriptionPayment {
+  id                    String       @id @default(cuid())
+  subscriptionId        String
+  subscription          Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  userId                String
+  providerTransactionId String       @unique
+  grossMicros           BigInt
+  feeMicros             BigInt       @default(0)
+  /// Neto recibido (bruto − comisión de la pasarela): base del reparto.
+  netMicros             BigInt
+  currency              String       @default("USD") @db.VarChar(3)
+  /// Meses que cubre este cobro (1 mensual, 12 anual): el neto se reparte
+  /// entre esos meses para el fondo de los creadores.
+  periodMonths          Int
+  paidAt                DateTime
+  refunded              Boolean      @default(false)
+  createdAt             DateTime     @default(now())
+
+  @@index([userId, paidAt])
+  @@index([paidAt])
 }
 
 enum PayoutStatus {
