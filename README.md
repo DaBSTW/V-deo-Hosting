@@ -431,6 +431,11 @@ docker compose up -d --build                 # web + postgres (aplica migracione
 docker compose --profile hls up -d           # OPCIONAL: worker HLS (solo R2 con R2_HLS_ENABLED=true)
 ```
 
+**Memoria de PostgreSQL:** `docker-compose.yml` lo arranca con ajustes para una VPS de 2 GB
+(`shared_buffers=128MB`, `work_mem=4MB`, `max_connections=30`) y un tope de **512 MB** para el contenedor
+(`mem_limit`). Así la web, la base de datos y el sistema caben con margen. Si amplías la VPS, sube
+`shared_buffers` (~25 % de la RAM) y `mem_limit`.
+
 Pon delante un reverse proxy con TLS. Ejemplo mínimo de Caddy:
 
 ```

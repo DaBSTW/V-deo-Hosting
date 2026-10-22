@@ -10,6 +10,21 @@ services:
       POSTGRES_DB: vidhost
     volumes:
       - pgdata:/var/lib/postgresql/data
+    # Ajustes para una VPS pequeña (2 GB de RAM): PostgreSQL se mantiene por debajo de ~400 MB.
+    # Si amplías la VPS, sube shared_buffers (~25 % de la RAM) y el límite del contenedor.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=128MB          # caché propia de Postgres
+      - -c
+      - effective_cache_size=512MB    # cuánta caché del sistema puede suponer (no reserva memoria)
+      - -c
+      - work_mem=4MB                  # memoria por operación de orden/agrupación
+      - -c
+      - maintenance_work_mem=64MB     # VACUUM, índices, migraciones
+      - -c
+      - max_connections=30            # la web usa un pool pequeño; cada conexión cuesta memoria
+    mem_limit: 512m                   # tope duro del contenedor (lo hace cumplir Docker)
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U vidhost"]
       interval: 5s
