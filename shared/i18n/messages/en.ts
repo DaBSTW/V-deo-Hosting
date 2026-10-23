@@ -339,6 +339,7 @@ const en: Messages = {
     columns: {
       video: "Video",
       status: "Status",
+      views: "Views",
       size: "Size",
       folder: "Folder",
       uploaded: "Uploaded",

@@ -340,6 +340,7 @@ const es = {
     columns: {
       video: "Video",
       status: "Estado",
+      views: "Reproducciones",
       size: "Tamaño",
       folder: "Carpeta",
       uploaded: "Subido",
