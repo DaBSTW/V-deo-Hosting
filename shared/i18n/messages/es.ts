@@ -633,7 +633,7 @@ const es = {
     monetagSubtitle: "Pega aquí el código que te da Monetag. Se inserta solo en el reproductor y en el enlace directo de videos monetizados.",
     monetagStep1: "En Monetag, añade tu dominio como sitio.",
     monetagStep2: "Verifícalo con la etiqueta <code>{meta}</code> (campo 1). Si usas el formato Push, pega el contenido del archivo <code>sw.js</code> (campo 3); se servirá en <code>/sw.js</code>.",
-    monetagStep3: "Crea las zonas (p. ej. OnClick/Popunder, In-Page Push o Vignette) y pega su código en el campo 2.",
+    monetagStep3: "Crea las zonas y pega su código en el campo 2 (In-Page Push, Vignette…). Para el pre-roll de video usa una zona VAST y para el popunder un Direct Link: van en «Anuncios del reproductor».",
     monetagStep4: "Guarda, activa la monetización y comprueba un video en una ventana privada sin bloqueador.",
     monetagMeta: "1 · Etiqueta de verificación ({tag})",
     monetagSnippet: "2 · Código de anuncios para el reproductor",
@@ -642,6 +642,16 @@ const es = {
     topEarners: "Usuarios con más vistas monetizadas (mes)",
     topEarnersSubtitle: "Revisa picos anómalos antes de aprobar pagos",
     noActivity: "Sin actividad monetizada todavía.",
+    playerAds: {
+      title: "Anuncios del reproductor",
+      hint: "Pre-roll de video antes del contenido y popunder al pulsar reproducir. Nunca se muestran a los suscriptores Premium.",
+      vast: "Etiqueta VAST del pre-roll (URL https)",
+      skipAfter: "Saltar tras (s)",
+      vastEvery: "Minutos entre pre-rolls (0 = siempre)",
+      popunder: "Enlace del popunder (p. ej. Direct Link de Monetag)",
+      popunderEvery: "Minutos entre popunders",
+      note: "«Saltar tras» se usa si la etiqueta VAST no indica cuándo se puede saltar (0 = no se puede). El anuncio se pide desde el navegador del espectador: si no llega en 6 s o falla, el video empieza sin él.",
+    },
     settlement: {
       title: "Cierre mensual",
       subtitle: "Copia de tu panel de Monetag el RPM real de cada país y acredita el {share} % a los creadores",
@@ -725,6 +735,12 @@ const es = {
     unavailable: "Este video no está disponible.",
     auto: "Auto",
     skipIntro: "Saltar intro",
+    ad: "Anuncio",
+    adVisit: "Más información",
+    adSkip: "Saltar anuncio",
+    adSkipIn: "Saltar en {seconds}",
+    adMute: "Silenciar anuncio",
+    adUnmute: "Activar sonido del anuncio",
     // Textos de los controles de Plyr. Se leen con t.raw(): {seektime} lo sustituye Plyr.
     plyr: {
       restart: "Reiniciar",

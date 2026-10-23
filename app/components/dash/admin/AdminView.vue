@@ -395,6 +395,34 @@ const methodCfg = (m: PayoutMethod) => {
           <span class="label">{{ t("admin.monetagSnippet") }}</span>
           <textarea v-model="settings.monetagPlayerSnippet" rows="5" placeholder="<script>…</script>" class="input font-mono !text-xs" @input="touch" />
         </label>
+        <!-- Anuncios del reproductor: pre-roll VAST y popunder -->
+        <fieldset class="rounded-2xl border border-divider p-4">
+          <legend class="px-1 text-sm font-extrabold text-contrast">{{ t("admin.playerAds.title") }}</legend>
+          <p class="mb-3 text-xs text-secondary">{{ t("admin.playerAds.hint") }}</p>
+          <label class="block">
+            <span class="label">{{ t("admin.playerAds.vast") }}</span>
+            <input v-model.trim="settings.vastTagUrl" type="url" placeholder="https://…/vast.xml?…" class="input font-mono !text-xs" @input="touch" />
+          </label>
+          <div class="mt-3 grid grid-cols-2 gap-2 sm:max-w-md">
+            <label class="block min-w-0">
+              <span class="label !text-xs">{{ t("admin.playerAds.skipAfter") }}</span>
+              <input type="number" min="0" max="60" :value="settings.vastSkipAfterSec" class="input" @input="(settings!.vastSkipAfterSec = num(($event.target as HTMLInputElement).value)), touch()" />
+            </label>
+            <label class="block min-w-0">
+              <span class="label !text-xs">{{ t("admin.playerAds.vastEvery") }}</span>
+              <input type="number" min="0" max="1440" :value="settings.vastEveryMin" class="input" @input="(settings!.vastEveryMin = num(($event.target as HTMLInputElement).value)), touch()" />
+            </label>
+          </div>
+          <label class="mt-4 block">
+            <span class="label">{{ t("admin.playerAds.popunder") }}</span>
+            <input v-model.trim="settings.popunderUrl" type="url" placeholder="https://…" class="input font-mono !text-xs" @input="touch" />
+          </label>
+          <label class="mt-3 block sm:max-w-[220px]">
+            <span class="label !text-xs">{{ t("admin.playerAds.popunderEvery") }}</span>
+            <input type="number" min="1" max="1440" :value="settings.popunderEveryMin" class="input" @input="(settings!.popunderEveryMin = num(($event.target as HTMLInputElement).value)), touch()" />
+          </label>
+          <p class="mt-3 text-xs text-secondary">{{ t("admin.playerAds.note") }}</p>
+        </fieldset>
         <label class="block">
           <span class="label">{{ t("admin.monetagSw") }}</span>
           <textarea v-model="settings.monetagServiceWorker" rows="3" placeholder="self.options = { … }; importScripts(…)" class="input font-mono !text-xs" @input="touch" />

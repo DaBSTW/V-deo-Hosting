@@ -24,6 +24,7 @@ useHead(() => ({
       :appearance="data.player"
       :intro="data.intro"
       :subtitles="data.subtitles"
+      :ads="data.ads"
       :resume-key="data.publicId"
       embed
     />

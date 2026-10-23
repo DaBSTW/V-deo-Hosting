@@ -14,6 +14,9 @@ const methodIds = [...PAYOUT_METHOD_IDS] as [PayoutMethod, ...PayoutMethod[]];
 /** Mínimo de retiro de la plataforma: ningún método puede bajar de aquí. */
 export const MIN_PAYOUT_USD = 25;
 
+/** URL de anuncio: https (o http://localhost para probar en local). */
+const adUrl = (v: string) => v === "" || /^https:\/\/\S+$/.test(v) || /^http:\/\/localhost(:\d+)?\/\S*$/.test(v);
+
 export const monetizationSettingsSchema = z.object({
   /** Interruptor general: anuncios + ganancias. */
   enabled: z.boolean(),
@@ -38,6 +41,19 @@ export const monetizationSettingsSchema = z.object({
   monetagPlayerSnippet: z.string().max(20_000),
   /** Contenido del archivo sw.js que pide Monetag (formato Push), servido en /sw.js. */
   monetagServiceWorker: z.string().max(20_000),
+  /**
+   * Etiqueta VAST para el anuncio de video antes del contenido (pre-roll). La
+   * pide el navegador del espectador (nunca el VPS: la red vería nuestra IP).
+   */
+  vastTagUrl: z.string().max(2_000).refine(adUrl, "httpsRequired"),
+  /** Segundos hasta poder saltar el anuncio si la etiqueta VAST no lo indica (0 = no se puede saltar). */
+  vastSkipAfterSec: z.number().int().min(0).max(60),
+  /** Minutos entre pre-rolls para un mismo espectador (0 = en cada reproducción). */
+  vastEveryMin: z.number().int().min(0).max(1440),
+  /** Enlace del popunder (p. ej. Direct Link de Monetag) que se abre al pulsar reproducir. */
+  popunderUrl: z.string().max(2_000).refine(adUrl, "httpsRequired"),
+  /** Minutos entre popunders para un mismo espectador. */
+  popunderEveryMin: z.number().int().min(1).max(1440),
 });
 export type MonetizationSettings = z.infer<typeof monetizationSettingsSchema>;
 
@@ -57,6 +73,11 @@ export const DEFAULT_SETTINGS: MonetizationSettings = {
   monetagMetaTag: "",
   monetagPlayerSnippet: "",
   monetagServiceWorker: "",
+  vastTagUrl: "",
+  vastSkipAfterSec: 5,
+  vastEveryMin: 0,
+  popunderUrl: "",
+  popunderEveryMin: 30,
 };
 
 const KEY = "monetization";

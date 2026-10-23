@@ -366,12 +366,22 @@ export type EmbedLookup =
       viewUrl: string;
       /** `null` si el video no está monetizado. */
       monetization: { qualifyAfterSec: number; adSnippet: string } | null;
+      /** Pre-roll VAST y popunder (`null` para Premium o si el video no está monetizado). */
+      ads: PlayerAds | null;
       /** Personalización del reproductor del dueño. */
       player: PlayerSettings;
       /** Tramo para «Saltar intro» (la del video o la predeterminada), o `null`. */
       intro: IntroRange | null;
       subtitles: { id: string; lang: string; label: string; isDefault: boolean; src: string }[];
     };
+
+export interface PlayerAds {
+  vastUrl: string | null;
+  skipAfterSec: number;
+  vastEveryMin: number;
+  popunderUrl: string | null;
+  popunderEveryMin: number;
+}
 
 export interface PublicDownloadOption {
   /** Calidad elegida; se canjea por un ticket en POST /api/public/videos/:id/download. */
@@ -423,6 +433,10 @@ export async function getEmbedPlayback(publicId: string, viewer: { premium: bool
           { qualifyAfterSec: mon.minWatchSeconds, adSnippet: viewer.premium ? "" : mon.monetagPlayerSnippet }
         : null,
     player,
+    ads:
+      mon.enabled && video.user.monetizationEnabled && !viewer.premium && (mon.vastTagUrl || mon.popunderUrl)
+        ? { vastUrl: mon.vastTagUrl || null, skipAfterSec: mon.vastSkipAfterSec, vastEveryMin: mon.vastEveryMin, popunderUrl: mon.popunderUrl || null, popunderEveryMin: mon.popunderEveryMin }
+        : null,
     intro: resolveIntro(introOf(video), player),
     subtitles: video.subtitles.map((s) => ({ id: s.id, lang: s.lang, label: s.label, isDefault: s.isDefault, src: subtitleSrc(publicId, s) })),
     title: video.title,

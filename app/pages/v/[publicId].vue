@@ -39,6 +39,7 @@ const qualityLabel = (o: { kind: string; height: number | null }) =>
           :appearance="data.player"
           :intro="data.intro"
           :subtitles="data.subtitles"
+          :ads="data.ads"
           :resume-key="data.publicId"
         />
         <PlayerMessage v-else :title="data.title" :kind="data.state" :message="data.state === 'processing' ? t('player.processing') : t('player.unavailable')" />

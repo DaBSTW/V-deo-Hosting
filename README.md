@@ -284,6 +284,24 @@ pueda suspender una cuenta por fraude directamente en la base de datos. El inter
 plataforma (Administración) sigue existiendo.
 Mientras no pegues el código de anuncios, ninguna vista genera ganancias, para no pagar vistas sin ingresos.
 
+### Anuncios del reproductor: pre-roll VAST y popunder
+
+En **Administración → Monetag → Anuncios del reproductor**:
+
+* **Etiqueta VAST** (zona de video de Monetag u otra red): antes del contenido se reproduce el anuncio,
+  con etiqueta «Anuncio», cuenta atrás, «Más información» (clic del anunciante) y **Saltar anuncio**
+  cuando lo permita la etiqueta (`skipoffset`) o, si no lo indica, tras los segundos configurados.
+  Se envían las impresiones y los eventos (inicio, cuartiles, completado, saltado, silencio).
+  Admite Wrappers (hasta 5) y archivos MP4/WebM progresivos; sin VPAID.
+* **Popunder** (p. ej. Direct Link de Monetag): se abre en otra pestaña con el primer clic en el
+  reproductor (sin `opener`, para que la página del anunciante no pueda tocar la nuestra).
+* **Frecuencia por espectador** para cada uno (en el navegador del espectador).
+
+Nunca se muestran a los suscriptores Premium ni en cuentas suspendidas. La etiqueta, el video del
+anuncio y los píxeles los pide **el navegador del espectador** (si pasaran por el VPS, la red vería
+nuestra IP y lo marcaría como tráfico no válido); el VPS no hace nada extra. Si el anuncio no llega en
+6 s o falla, el video empieza sin él.
+
 ### Qué cuenta como vista monetizada
 
 * Solo cuenta si hay código de anuncios configurado (paso 3).

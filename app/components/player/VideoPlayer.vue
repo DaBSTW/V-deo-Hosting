@@ -12,7 +12,9 @@ import { detectAdblock } from "~/lib/adblock";
 import { messagesFor } from "#shared/i18n/messages";
 import type { PlaybackSource } from "#srv/video-providers/types";
 import { DEFAULT_PLAYER, contrastOn, type IntroRange, type PlayerSettings } from "#shared/lib/player-settings";
-import { ChevronsRight } from "lucide-vue-next";
+import { ChevronsRight, ExternalLink, Volume2, VolumeX } from "lucide-vue-next";
+import { loadVast, ping, type VastAd, type VastEvent } from "~/lib/vast";
+import type { PlayerAds } from "#srv/videos/service";
 
 const props = withDefaults(
   defineProps<{
@@ -33,8 +35,10 @@ const props = withDefaults(
     intro?: IntroRange | null;
     /** Subtítulos WebVTT (rutas propias, mismo dominio). */
     subtitles?: { id: string; lang: string; label: string; isDefault: boolean; src: string }[];
+    /** Pre-roll VAST y popunder (`null` = sin anuncios: Premium o video no monetizado). */
+    ads?: PlayerAds | null;
   }>(),
-  { autoPlay: false, appearance: () => DEFAULT_PLAYER, embed: false, resumeKey: undefined, intro: null, subtitles: () => [] },
+  { autoPlay: false, appearance: () => DEFAULT_PLAYER, embed: false, resumeKey: undefined, intro: null, subtitles: () => [], ads: null },
 );
 
 const { t, locale } = useI18n();
@@ -52,6 +56,67 @@ const skipIntro = () => {
   if (props.intro && videoEl.value) videoEl.value.currentTime = props.intro.end;
   inIntro.value = false;
 };
+
+// ---------------------------------------------------------------- anuncios
+/** Frecuencia por espectador (localStorage; si no está disponible, siempre se muestra). */
+const due = (key: string, everyMin: number) => {
+  if (!everyMin) return true;
+  try {
+    return Date.now() - Number(localStorage.getItem(key) ?? 0) >= everyMin * 60_000;
+  } catch {
+    return true;
+  }
+};
+const markShown = (key: string) => {
+  try {
+    localStorage.setItem(key, String(Date.now()));
+  } catch {
+    /* sin almacenamiento */
+  }
+};
+
+type AdPhase = "none" | "loading" | "ready" | "playing" | "done";
+const adPhase = ref<AdPhase>("none");
+const ad = shallowRef<VastAd | null>(null);
+const adEl = ref<HTMLVideoElement>();
+const adLeft = ref(0);
+const adSkipIn = ref<number | null>(null);
+const adMuted = ref(false);
+const adActive = computed(() => adPhase.value === "playing");
+let skipAd: () => void = () => {};
+let adSent = new Set<VastEvent>();
+
+function adTrack(ev: VastEvent) {
+  if (!ad.value || adSent.has(ev)) return;
+  adSent.add(ev);
+  ping(ad.value.tracking[ev]);
+}
+
+/** Popunder: se abre en otra pestaña al primer clic y la ventana del video recupera el foco. */
+function openPopunder() {
+  const url = props.ads?.popunderUrl;
+  if (!url || !due("ad:popunder", props.ads!.popunderEveryMin)) return;
+  markShown("ad:popunder");
+  const w = window.open("about:blank", "_blank");
+  if (!w) return;
+  // Sin `opener`: la página del anunciante no puede tocar la nuestra.
+  w.opener = null;
+  w.location.href = url;
+  window.focus();
+}
+
+function adClick() {
+  if (!ad.value?.clickThrough) return;
+  ping(ad.value.clickTracking);
+  window.open(ad.value.clickThrough, "_blank", "noopener,noreferrer");
+}
+function adToggleMute() {
+  if (!adEl.value) return;
+  adEl.value.muted = !adEl.value.muted;
+  adMuted.value = adEl.value.muted;
+  adTrack(adMuted.value ? "mute" : "unmute");
+  adSent.delete(adMuted.value ? "unmute" : "mute");
+}
 
 /** Inicio automático: por URL (?autoplay=1) o por la personalización (solo insertado, en silencio). */
 const autoStart = computed(() => props.autoPlay || (props.embed && look.value.autoplay));
@@ -180,6 +245,117 @@ onMounted(() => {
     });
   }
 
+  // ---------------------------------------------------------------- anuncios
+  const ads = props.ads;
+  if (ads?.popunderUrl) {
+    // Primer clic sobre el reproductor (el de «reproducir»): el navegador solo
+    // permite abrir ventanas dentro de un gesto del usuario.
+    const root = video.closest(".player") as HTMLElement | null;
+    const onFirstClick = () => openPopunder();
+    root?.addEventListener("click", onFirstClick, { capture: true, once: true });
+    disposers.push(() => root?.removeEventListener("click", onFirstClick, { capture: true }));
+  }
+  if (ads?.vastUrl && due("ad:preroll", ads.vastEveryMin)) {
+    adPhase.value = "loading";
+    // Se pide al montar, para que el anuncio esté listo cuando el espectador pulse «reproducir».
+    void loadVast(ads.vastUrl, { timeoutMs: 6000, canPlay: (type) => !!video.canPlayType(type) }).then((res) => {
+      if (disposed) return;
+      ad.value = res;
+      adPhase.value = res ? "ready" : "done";
+      if (res && adEl.value) {
+        adEl.value.src = res.mediaUrl;
+        adEl.value.load();
+      }
+    });
+
+    const finishAd = (resume = true) => {
+      adPhase.value = "done";
+      adEl.value?.pause();
+      if (resume) void video.play().catch(() => {});
+    };
+    const startAd = () => {
+      const el = adEl.value;
+      const a = ad.value;
+      if (!el || !a) return finishAd();
+      // Si el anuncio llegó antes de montarse el reproductor, aún no tiene fuente.
+      if (!el.currentSrc) el.src = a.mediaUrl;
+      adSent = new Set();
+      adPhase.value = "playing";
+      markShown("ad:preroll");
+      const fallbackSkip = ads.skipAfterSec > 0 ? ads.skipAfterSec : null;
+      const skipAt = a.skipOffset ?? fallbackSkip;
+      const onTime = () => {
+        const d = Number.isFinite(el.duration) && el.duration > 0 ? el.duration : a.duration;
+        const t = el.currentTime;
+        adLeft.value = Math.max(0, Math.ceil(d - t));
+        adSkipIn.value = skipAt == null ? null : Math.max(0, Math.ceil(skipAt - t));
+        if (d) {
+          if (t >= d * 0.25) adTrack("firstQuartile");
+          if (t >= d * 0.5) adTrack("midpoint");
+          if (t >= d * 0.75) adTrack("thirdQuartile");
+        }
+      };
+      const cleanup = () => {
+        el.removeEventListener("timeupdate", onTime);
+        el.removeEventListener("ended", onEnded);
+        el.removeEventListener("error", onError);
+      };
+      const onEnded = () => {
+        adTrack("complete");
+        cleanup();
+        finishAd();
+      };
+      const onError = () => {
+        ping(a.errors, { ERRORCODE: "405" });
+        cleanup();
+        finishAd();
+      };
+      skipAd = () => {
+        adTrack("skip");
+        cleanup();
+        finishAd();
+      };
+      el.addEventListener("timeupdate", onTime);
+      el.addEventListener("ended", onEnded);
+      el.addEventListener("error", onError);
+      el.muted = video.muted;
+      adMuted.value = el.muted;
+      el.play()
+        .then(() => {
+          ping(a.impressions);
+          adTrack("start");
+        })
+        .catch(() => {
+          // Sin permiso para sonar: se intenta en silencio.
+          el.muted = adMuted.value = true;
+          el.play().then(() => (ping(a.impressions), adTrack("start"))).catch(onError);
+        });
+    };
+
+    // La primera reproducción del contenido se detiene y entra el anuncio.
+    const onContentPlay = () => {
+      if (adPhase.value === "playing") return video.pause();
+      if (adPhase.value === "ready") {
+        video.pause();
+        return startAd();
+      }
+      if (adPhase.value === "loading") {
+        video.pause();
+        // El anuncio aún no llegó: se espera un poco y, si no, empieza el video.
+        const waitUntil = Date.now() + 3000;
+        const tick = () => {
+          if (disposed) return;
+          if (adPhase.value === "ready") return startAd();
+          if (adPhase.value === "loading" && Date.now() < waitUntil) return void setTimeout(tick, 150);
+          finishAd();
+        };
+        tick();
+      }
+    };
+    video.addEventListener("play", onContentPlay);
+    disposers.push(() => video.removeEventListener("play", onContentPlay));
+  }
+
   let player: Plyr | undefined;
   let hls: import("hls.js").default | undefined;
   let disposed = false;
@@ -302,6 +478,19 @@ onBeforeUnmount(() => cleanup?.());
         <img v-if="wm.type === 'image'" :src="wm.imageUrl" alt="" referrerpolicy="no-referrer" />
         <span v-else>{{ wm.text }}</span>
       </component>
+      <!-- Pre-roll: cubre el reproductor (también sus controles) mientras dura. -->
+      <div v-show="adActive" class="player-ad" role="region" :aria-label="t('player.ad')">
+        <video ref="adEl" class="h-full w-full object-contain" playsinline preload="auto" @click="adClick" />
+        <div class="player-ad__bar">
+          <span class="player-ad__badge">{{ t("player.ad") }} · {{ Math.floor(adLeft / 60) }}:{{ String(adLeft % 60).padStart(2, "0") }}</span>
+          <button v-if="ad?.clickThrough" type="button" class="player-ad__link" @click="adClick">{{ t("player.adVisit") }}<ExternalLink class="h-3.5 w-3.5" /></button>
+        </div>
+        <button type="button" class="player-ad__mute" :aria-label="adMuted ? t('player.adUnmute') : t('player.adMute')" @click="adToggleMute">
+          <component :is="adMuted ? VolumeX : Volume2" class="h-5 w-5" />
+        </button>
+        <button v-if="adSkipIn === 0" type="button" class="player-ad__skip" @click="skipAd()">{{ t("player.adSkip") }}<ChevronsRight class="h-4 w-4" /></button>
+        <span v-else-if="adSkipIn != null" class="player-ad__skip player-ad__skip--wait">{{ t("player.adSkipIn", { seconds: adSkipIn }) }}</span>
+      </div>
       <Transition name="skip">
         <button v-if="inIntro" type="button" class="player-skip" @click.stop="skipIntro">
           {{ t("player.skipIntro") }}<ChevronsRight class="h-4 w-4" />
@@ -347,6 +536,79 @@ onBeforeUnmount(() => cleanup?.());
   font: 800 15px/1.2 var(--font-sans);
   color: #fff;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+}
+.player-ad {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: #000;
+}
+.player-ad video {
+  cursor: pointer;
+}
+.player-ad__bar {
+  position: absolute;
+  inset: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  background: linear-gradient(rgba(0, 0, 0, 0.6), transparent);
+  pointer-events: none;
+}
+.player-ad__badge {
+  border-radius: 6px;
+  background: #f5d90a;
+  padding: 3px 8px;
+  color: #000;
+  font: 800 12px/1.3 var(--font-sans);
+}
+.player-ad__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 6px 10px;
+  color: #fff;
+  font: 700 13px/1 var(--font-sans);
+  pointer-events: auto;
+}
+.player-ad__mute {
+  position: absolute;
+  left: 14px;
+  bottom: 18px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+}
+.player-ad__skip {
+  position: absolute;
+  right: 0;
+  bottom: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-right: 0;
+  border-radius: 10px 0 0 10px;
+  background: rgba(0, 0, 0, 0.75);
+  padding: 11px 16px;
+  color: #fff;
+  font: 700 14px/1 var(--font-sans);
+}
+button.player-ad__skip:hover {
+  background: var(--player-accent, var(--brand));
+  color: var(--player-on-accent, #000);
+}
+.player-ad__skip--wait {
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 600;
 }
 .player-skip {
   position: absolute;

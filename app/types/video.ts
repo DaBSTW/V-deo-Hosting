@@ -1,4 +1,5 @@
 import type { PlaybackSource } from "#srv/video-providers/types";
+import type { PlayerAds } from "#srv/videos/service";
 import type { PlayerSettings } from "#shared/lib/player-settings";
 
 export interface DownloadChoice {
@@ -34,4 +35,5 @@ export type PublicPlayback =
       intro: { start: number; end: number } | null;
       subtitles: { id: string; lang: string; label: string; isDefault: boolean; src: string }[];
       offer: PremiumOffer | null;
+      ads: PlayerAds | null;
     };
