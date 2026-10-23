@@ -363,6 +363,10 @@ const es = {
       uploaded: "Subido",
     },
     modal: {
+      views: "Reproducciones",
+      downloads: "Descargas",
+      downloadRate: "Tasa de descarga",
+      share: "Compartir",
       status: "Estado",
       duration: "Duración",
       size: "Tamaño",

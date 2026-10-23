@@ -362,6 +362,10 @@ const en: Messages = {
       uploaded: "Uploaded",
     },
     modal: {
+      views: "Plays",
+      downloads: "Downloads",
+      downloadRate: "Download rate",
+      share: "Share",
       status: "Status",
       duration: "Duration",
       size: "Size",

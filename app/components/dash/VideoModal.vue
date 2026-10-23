@@ -1,13 +1,14 @@
 <script setup lang="ts">
 /** Detalle rápido: vista previa real del embed + códigos para copiar. */
-import { Clock, ExternalLink, FastForward, Pencil, Trash2 } from "lucide-vue-next";
+import { Clock, Download, ExternalLink, Eye, FastForward, Pencil, Percent, Share2, Trash2 } from "lucide-vue-next";
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const fmt = useFormat();
 const d = useDashboard();
 const video = computed(() => d.videos.value.find((v) => v.id === d.openId.value) ?? null);
 const ready = computed(() => video.value?.status === "ready");
 const close = () => (d.openId.value = null);
+const pct = computed(() => new Intl.NumberFormat(locale.value, { style: "percent", maximumFractionDigits: 1 }));
 
 // ----- Saltar intro
 const frame = ref<HTMLIFrameElement>();
@@ -64,6 +65,39 @@ async function clearIntro() {
             allowfullscreen
           />
           <DashVideoThumb v-else :video="video" />
+        </div>
+
+        <!-- Rendimiento -->
+        <dl class="mt-4 grid grid-cols-3 gap-3">
+          <div class="rounded-xl bg-button px-3 py-2.5">
+            <dt class="flex min-w-0 items-start gap-1.5 break-words text-xs font-bold text-secondary"><Eye class="h-3.5 w-3.5 shrink-0 max-sm:hidden" /><span class="leading-tight">{{ t("video.modal.views") }}</span></dt>
+            <dd class="mt-1 text-lg font-extrabold tabular-nums text-contrast">{{ fmt.formatCount(video.views) }}</dd>
+          </div>
+          <div class="rounded-xl bg-button px-3 py-2.5">
+            <dt class="flex min-w-0 items-start gap-1.5 break-words text-xs font-bold text-secondary"><Download class="h-3.5 w-3.5 shrink-0 max-sm:hidden" /><span class="leading-tight">{{ t("video.modal.downloads") }}</span></dt>
+            <dd class="mt-1 text-lg font-extrabold tabular-nums text-contrast">{{ fmt.formatCount(video.downloads) }}</dd>
+          </div>
+          <div class="rounded-xl bg-button px-3 py-2.5">
+            <dt class="flex min-w-0 items-start gap-1.5 break-words text-xs font-bold text-secondary"><Percent class="h-3.5 w-3.5 shrink-0 max-sm:hidden" /><span class="leading-tight">{{ t("video.modal.downloadRate") }}</span></dt>
+            <dd class="mt-1 text-lg font-extrabold tabular-nums text-contrast">{{ video.views ? pct.format(video.downloads / video.views) : "—" }}</dd>
+          </div>
+        </dl>
+
+        <!-- Compartir -->
+        <section :class="['mt-4 rounded-2xl bg-button p-4', ready ? '' : 'pointer-events-none opacity-50']">
+          <div class="mb-3 flex items-center justify-between gap-2">
+            <h3 class="flex items-center gap-1.5 text-sm font-bold text-contrast"><Share2 class="h-4 w-4" />{{ t("video.modal.share") }}</h3>
+            <UiButton v-if="ready" size="sm" color="transparent" class="!h-7 !px-2" :href="video.watchUrl" target="_blank" rel="noopener"><ExternalLink />{{ t("video.modal.open") }}</UiButton>
+          </div>
+          <span class="mb-1 block text-xs font-semibold text-secondary">{{ t("video.modal.directLink") }}</span>
+          <UiCopyField :value="video.watchUrl" :label="t('video.modal.directLink')" class="[&_button]:!bg-raised [&_input]:!bg-raised" />
+          <span class="mb-1 mt-3 block text-xs font-semibold text-secondary">{{ t("video.modal.embedCode") }}</span>
+          <UiCopyField :value="video.iframe" :label="t('video.modal.embedCode')" multiline class="[&_button]:!bg-raised [&_textarea]:!bg-raised" />
+        </section>
+
+        <div class="mt-4 flex flex-wrap gap-2">
+          <UiButton size="sm" @click="d.actions.rename(video)"><Pencil />{{ t("video.modal.rename") }}</UiButton>
+          <UiButton size="sm" color="red" class="ml-auto" @click="d.actions.remove(video)"><Trash2 />{{ t("video.modal.delete") }}</UiButton>
         </div>
       </div>
 
@@ -138,20 +172,6 @@ async function clearIntro() {
           </div>
         </div>
 
-        <div :class="ready ? '' : 'pointer-events-none opacity-50'">
-          <span class="label">{{ t("video.modal.embedCode") }}</span>
-          <UiCopyField :value="video.iframe" :label="t('video.modal.embedCode')" multiline />
-        </div>
-        <div :class="ready ? '' : 'pointer-events-none opacity-50'">
-          <span class="label">{{ t("video.modal.directLink") }}</span>
-          <UiCopyField :value="video.watchUrl" :label="t('video.modal.directLink')" />
-        </div>
-
-        <div class="flex flex-wrap gap-2 border-t border-divider pt-4">
-          <UiButton size="sm" @click="d.actions.rename(video)"><Pencil />{{ t("video.modal.rename") }}</UiButton>
-          <UiButton v-if="ready" size="sm" :href="video.watchUrl" target="_blank" rel="noopener"><ExternalLink />{{ t("video.modal.open") }}</UiButton>
-          <UiButton size="sm" color="red" @click="d.actions.remove(video)"><Trash2 />{{ t("video.modal.delete") }}</UiButton>
-        </div>
       </div>
     </div>
   </UiModal>
