@@ -79,7 +79,7 @@ export const DEFAULT_SETTINGS: MonetizationSettings = {
   vastSkipAfterSec: 5,
   vastEveryMin: 0,
   popunderUrl: "",
-  popunderEveryMin: 30,
+  popunderEveryMin: 10,
   popunderOnDownload: true,
 };
 
