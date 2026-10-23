@@ -111,6 +111,7 @@ model Video {
   views         Int              @default(0)
   downloads     Int              @default(0)
   dailyStats    VideoDailyStat[]
+  subtitles     Subtitle[]
 
   // ---------------- Campos privados (solo backend) ----------------
   provider           MediaProvider
@@ -345,4 +346,23 @@ model IdentityVerification {
 
   @@index([userId, createdAt])
   @@index([status, createdAt])
+}
+
+/// Subtítulos de un video (WebVTT). Son archivos de pocos KB: se guardan en la
+/// DB y se sirven con caché larga (Cloudflare los entrega sin tocar el VPS).
+model Subtitle {
+  id        String   @id @default(cuid())
+  videoId   String
+  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  /// Código de idioma (BCP 47 corto: es, en, pt-BR…).
+  lang      String   @db.VarChar(16)
+  label     String   @db.VarChar(60)
+  /// Se activan solos al reproducir.
+  isDefault Boolean  @default(false)
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([videoId, lang])
+  @@index([videoId])
 }

@@ -31,8 +31,10 @@ const props = withDefaults(
     resumeKey?: string;
     /** Tramo de la intro para «Saltar intro» (ya resuelto por el servidor). */
     intro?: IntroRange | null;
+    /** Subtítulos WebVTT (rutas propias, mismo dominio). */
+    subtitles?: { id: string; lang: string; label: string; isDefault: boolean; src: string }[];
   }>(),
-  { autoPlay: false, appearance: () => DEFAULT_PLAYER, embed: false, resumeKey: undefined, intro: null },
+  { autoPlay: false, appearance: () => DEFAULT_PLAYER, embed: false, resumeKey: undefined, intro: null, subtitles: () => [] },
 );
 
 const { t, locale } = useI18n();
@@ -159,7 +161,9 @@ onMounted(() => {
       const r = props.intro;
       if (!r || !look.value.skipIntro.enabled) return (inIntro.value = false);
       const now = video.currentTime;
-      const inside = now >= r.start && now < r.end - 0.5;
+      // Si la intro marcada pasa del final real del archivo, se recorta a su duración.
+      const end = Number.isFinite(video.duration) ? Math.min(r.end, video.duration) : r.end;
+      const inside = now >= r.start && now < end - 0.5;
       if (inside && look.value.skipIntro.auto && !autoDone && !video.paused) {
         autoDone = true;
         video.currentTime = r.end;
@@ -183,8 +187,13 @@ onMounted(() => {
   const plyrI18n = { ...messagesFor(locale.value).player.plyr, qualityLabel: { 0: t("player.auto") } };
 
   const a = look.value;
-  const controls = (BASE_OPTIONS.controls as string[]).filter((c) => c !== "pip" || a.pip);
-  const settings = (BASE_OPTIONS.settings as string[]).filter((c) => c !== "speed" || a.speed);
+  const hasSubs = props.subtitles.length > 0;
+  const defaultSub = props.subtitles.find((s) => s.isDefault);
+  // Con subtítulos: botón CC junto al volumen y selector de idioma en ajustes.
+  const controls = (BASE_OPTIONS.controls as string[])
+    .filter((c) => c !== "pip" || a.pip)
+    .flatMap((c) => (c === "settings" && hasSubs ? ["captions", c] : [c]));
+  const settings = [...(hasSubs ? ["captions"] : []), ...(BASE_OPTIONS.settings as string[]).filter((c) => c !== "speed" || a.speed)];
   // El inicio automático solo funciona en silencio en los navegadores actuales.
   if (autoStart.value) video.muted = true;
   const mount = async (extra: Partial<Plyr.Options> = {}) => {
@@ -195,6 +204,7 @@ onMounted(() => {
       controls,
       settings,
       loop: { active: a.loop },
+      captions: { active: !!defaultSub, language: defaultSub?.lang ?? "auto", update: true },
       i18n: plyrI18n,
       autoplay: autoStart.value,
       muted: autoStart.value,
@@ -274,7 +284,9 @@ onBeforeUnmount(() => cleanup?.());
       :poster="source.posterUrl ?? undefined"
       :aria-label="title"
       @error="source.kind === 'mp4' && (failed = true)"
-    />
+    >
+      <track v-for="s in subtitles" :key="s.id" kind="subtitles" :src="s.src" :srclang="s.lang" :label="s.label" :default="s.isDefault || undefined" />
+    </video>
     <Teleport v-if="overlayTarget" :to="overlayTarget">
       <!-- Título superpuesto (solo insertado): se oculta junto con los controles. -->
       <div v-if="embed && look.showTitle" class="player-title">{{ title }}</div>
@@ -340,7 +352,8 @@ onBeforeUnmount(() => cleanup?.());
   position: absolute;
   right: 16px;
   bottom: 64px;
-  z-index: 4;
+  /* Por debajo de los controles de Plyr (z 3): el menú de ajustes queda encima. */
+  z-index: 2;
   display: inline-flex;
   align-items: center;
   gap: 6px;

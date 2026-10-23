@@ -22,6 +22,7 @@ import type {
 } from "../video-providers/types";
 import { toPublicVideo, type PublicVideo } from "./dto";
 import { downloadTicketPath, mediaPath } from "./playback-token";
+import { subtitleSrc } from "./subtitles";
 import { recordDownload } from "./stats-buffer";
 import { getMonetizationSettings } from "../monetization/settings";
 import { getPremiumSettings } from "../premium/settings";
@@ -369,6 +370,7 @@ export type EmbedLookup =
       player: PlayerSettings;
       /** Tramo para «Saltar intro» (la del video o la predeterminada), o `null`. */
       intro: IntroRange | null;
+      subtitles: { id: string; lang: string; label: string; isDefault: boolean; src: string }[];
     };
 
 export interface PublicDownloadOption {
@@ -391,7 +393,11 @@ const downloadsEnabled = (v: Video) => v.allowDownload && getCoreEnv().ALLOW_DOW
 export async function getEmbedPlayback(publicId: string, viewer: { premium: boolean } = { premium: false }): Promise<EmbedLookup> {
   const video = await prisma.video.findUnique({
     where: { publicId },
-    include: { user: { select: { monetizationEnabled: true, playerSettings: true } } },
+    include: {
+      user: { select: { monetizationEnabled: true, playerSettings: true } },
+      // Misma consulta: los subtítulos viajan con los datos de reproducción.
+      subtitles: { select: { id: true, lang: true, label: true, isDefault: true, updatedAt: true }, orderBy: { createdAt: "asc" } },
+    },
   });
   if (!video) return { state: "not_found" };
   if (video.status === "ERROR") return { state: "error", title: video.title };
@@ -418,6 +424,7 @@ export async function getEmbedPlayback(publicId: string, viewer: { premium: bool
         : null,
     player,
     intro: resolveIntro(introOf(video), player),
+    subtitles: video.subtitles.map((s) => ({ id: s.id, lang: s.lang, label: s.label, isDefault: s.isDefault, src: subtitleSrc(publicId, s) })),
     title: video.title,
     durationSec: video.durationSec,
     source: {

@@ -107,6 +107,8 @@ async function clearIntro() {
           <UiToggle :model-value="video.allowDownload" :label="t('video.modal.allowDownload')" @update:model-value="(v) => d.actions.setAllowDownload(video!, v)" />
         </div>
 
+        <DashVideoSubtitles :video-id="video.id" />
+
         <!-- Saltar intro -->
         <div class="rounded-2xl bg-button px-4 py-3">
           <div class="flex items-center justify-between gap-2">

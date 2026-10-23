@@ -23,6 +23,7 @@ useHead(() => ({
       :qualify-after-sec="data.monetization?.qualifyAfterSec"
       :appearance="data.player"
       :intro="data.intro"
+      :subtitles="data.subtitles"
       :resume-key="data.publicId"
       embed
     />

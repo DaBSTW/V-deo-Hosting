@@ -32,5 +32,6 @@ export type PublicPlayback =
       viewer: { premium: boolean };
       player: PlayerSettings;
       intro: { start: number; end: number } | null;
+      subtitles: { id: string; lang: string; label: string; isDefault: boolean; src: string }[];
       offer: PremiumOffer | null;
     };

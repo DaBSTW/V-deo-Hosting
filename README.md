@@ -122,6 +122,9 @@ workers/r2-event-forwarder               (opcional) Worker: eventos R2 → webho
 | `POST`   | `/api/premium/sync`          | `{ subscriptionId? }` → relee la suscripción en PayPal y renueva el pase Premium |
 | `POST`   | `/api/premium/cancel`        | Cancela la renovación (se conserva el periodo pagado) |
 | `POST`   | `/api/webhooks/paypal`       | Avisos de PayPal: solo disparan una relectura de la suscripción |
+| `GET`/`POST` | `/api/videos/:publicId/subtitles` | Subtítulos del video / subir (`{ lang, label, content, isDefault }`) |
+| `PATCH`/`DELETE` | `/api/videos/:publicId/subtitles/:id` | Renombrar o predeterminar / borrar |
+| `GET`    | `/subs/:publicId/:id.vtt`    | Archivo WebVTT público (caché larga) |
 | `GET`/`PUT` | `/api/player`             | Personalización del reproductor del usuario |
 | `GET`    | `/api/admin/users`           | (admin) Buscar cuentas (`?q=`, `?suspended=1`) |
 | `PATCH`  | `/api/admin/users/:id`       | (admin) `{ monetizationEnabled }`: suspender / reactivar |
@@ -355,6 +358,10 @@ En **Panel → Reproductor** cada creador ajusta el reproductor de todos sus vid
 * **Color** de los controles (8 sugeridos o cualquiera).
 * **Logo o marca de agua** (texto o imagen HTTPS), con enlace opcional, esquina y opacidad. Se muestra
   dentro del reproductor, también en pantalla completa.
+* **Subtítulos** (por video, en el modal): archivos `.srt` o `.vtt` (máx. 1 MB) en hasta 10 idiomas,
+  uno predeterminado. Los SRT se convierten a WebVTT al subirlos. Se guardan en la DB (pesan pocos KB) y
+  se sirven desde `/subs/<id>/<pista>.vtt?v=…` con caché de un año: tras la primera visita los entrega
+  Cloudflare. El espectador los elige con el botón CC del reproductor.
 * **Saltar intro**: botón durante la intro (o salto automático). La intro se marca en cada video
   (modal del video, con «usar el tiempo actual» de la vista previa) o con una intro predeterminada
   para los videos sin una propia (útil en series).

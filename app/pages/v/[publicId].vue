@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** /v/:publicId — enlace directo para compartir: reproductor, descarga e inserción. */
-import { Check, Clock, Code, Crown, Download, Globe, Link as LinkIcon } from "lucide-vue-next";
+import { Captions, Check, Clock, Code, Crown, Download, Globe, Link as LinkIcon } from "lucide-vue-next";
 
 const route = useRoute();
 const { t } = useI18n();
@@ -38,6 +38,7 @@ const qualityLabel = (o: { kind: string; height: number | null }) =>
           :qualify-after-sec="data.monetization?.qualifyAfterSec"
           :appearance="data.player"
           :intro="data.intro"
+          :subtitles="data.subtitles"
           :resume-key="data.publicId"
         />
         <PlayerMessage v-else :title="data.title" :kind="data.state" :message="data.state === 'processing' ? t('player.processing') : t('player.unavailable')" />
@@ -81,6 +82,10 @@ const qualityLabel = (o: { kind: string; height: number | null }) =>
           <div v-if="data.state === 'ready' && data.durationSec" class="flex items-center justify-between gap-3">
             <dt class="flex items-center gap-2 font-semibold text-secondary"><Clock class="h-4 w-4" />{{ t("ui.duration") }}</dt>
             <dd class="font-bold text-contrast">{{ fmt.formatDuration(data.durationSec) }}</dd>
+          </div>
+          <div v-if="data.state === 'ready' && data.subtitles.length" class="flex items-start justify-between gap-3">
+            <dt class="flex shrink-0 items-center gap-2 font-semibold text-secondary"><Captions class="h-4 w-4" />{{ t("watch.subtitles") }}</dt>
+            <dd class="text-right font-bold text-contrast">{{ data.subtitles.map((s) => s.label).join(", ") }}</dd>
           </div>
           <template v-if="data.state === 'ready' && data.downloads.length">
             <div class="flex items-center gap-2 pt-1 font-semibold text-secondary"><Download class="h-4 w-4" />{{ t("ui.qualities") }}</div>

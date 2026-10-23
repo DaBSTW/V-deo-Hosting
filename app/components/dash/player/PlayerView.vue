@@ -214,6 +214,7 @@ const toggles = ["showTitle", "autoplay", "loop", "resume", "speed", "pip"] as c
               :appearance="settings"
               :embed="embedMode"
               :intro="previewIntro"
+              :subtitles="preview.subtitles"
             />
             <!-- Sin videos: maqueta estática con los mismos colores y marcas. -->
             <div v-else class="relative h-full w-full bg-[radial-gradient(80%_80%_at_30%_20%,#2a2d33,#0b0c0e)]">
