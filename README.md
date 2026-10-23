@@ -355,6 +355,9 @@ En **Panel → Reproductor** cada creador ajusta el reproductor de todos sus vid
 * **Color** de los controles (8 sugeridos o cualquiera).
 * **Logo o marca de agua** (texto o imagen HTTPS), con enlace opcional, esquina y opacidad. Se muestra
   dentro del reproductor, también en pantalla completa.
+* **Saltar intro**: botón durante la intro (o salto automático). La intro se marca en cada video
+  (modal del video, con «usar el tiempo actual» de la vista previa) o con una intro predeterminada
+  para los videos sin una propia (útil en series).
 * **Inicio automático** (solo insertado y en silencio), **bucle**, **título** en el insertado,
   **continuar donde lo dejó** (posición guardada en el navegador del espectador), y los controles de
   **velocidad** e **imagen en imagen**.

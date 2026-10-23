@@ -31,6 +31,32 @@ export interface PlayerSettings {
   /** Controles opcionales. */
   speed: boolean;
   pip: boolean;
+  /** «Saltar intro»: botón durante la intro de cada video. */
+  skipIntro: {
+    enabled: boolean;
+    /** Saltarla sola, sin esperar a que el espectador pulse el botón. */
+    auto: boolean;
+    /** Intro predeterminada (segundos) para los videos sin una propia; fin 0 = ninguna. */
+    defaultStart: number;
+    defaultEnd: number;
+  };
+}
+
+/** Tramo de intro de un video (segundos). */
+export interface IntroRange {
+  start: number;
+  end: number;
+}
+
+/** Duración máxima de una intro (10 min). */
+export const MAX_INTRO_SEC = 600;
+
+/** Intro efectiva: la del video o, si no tiene, la predeterminada del creador. */
+export function resolveIntro(own: IntroRange | null, s: PlayerSettings): IntroRange | null {
+  if (!s.skipIntro.enabled) return null;
+  if (own) return own;
+  const { defaultStart: start, defaultEnd: end } = s.skipIntro;
+  return end > start ? { start, end } : null;
 }
 
 export const PLAYER_COLORS = ["#1bd96a", "#4f9cff", "#c78aff", "#ff496e", "#ffa347", "#f5d90a", "#22d3ee", "#ffffff"] as const;
@@ -44,6 +70,7 @@ export const DEFAULT_PLAYER: PlayerSettings = {
   resume: true,
   speed: true,
   pip: true,
+  skipIntro: { enabled: true, auto: false, defaultStart: 0, defaultEnd: 0 },
 };
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -71,6 +98,21 @@ export function resolvePlayer(raw: unknown): PlayerSettings {
     resume: bool(r.resume, DEFAULT_PLAYER.resume),
     speed: bool(r.speed, DEFAULT_PLAYER.speed),
     pip: bool(r.pip, DEFAULT_PLAYER.pip),
+    skipIntro: resolveSkipIntro(r.skipIntro),
+  };
+}
+
+function resolveSkipIntro(raw: unknown): PlayerSettings["skipIntro"] {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Partial<PlayerSettings["skipIntro"]>;
+  const sec = (v: unknown) => Math.min(3 * 3600, Math.max(0, Math.round(Number(v) || 0)));
+  const start = sec(r.defaultStart);
+  let end = sec(r.defaultEnd);
+  if (end <= start || end - start > MAX_INTRO_SEC) end = 0;
+  return {
+    enabled: typeof r.enabled === "boolean" ? r.enabled : DEFAULT_PLAYER.skipIntro.enabled,
+    auto: typeof r.auto === "boolean" ? r.auto : DEFAULT_PLAYER.skipIntro.auto,
+    defaultStart: end ? start : 0,
+    defaultEnd: end,
   };
 }
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** Detalle rápido: vista previa real del embed + códigos para copiar. */
-import { ExternalLink, Pencil, Trash2 } from "lucide-vue-next";
+import { Clock, ExternalLink, FastForward, Pencil, Trash2 } from "lucide-vue-next";
 
 const { t } = useI18n();
 const fmt = useFormat();
@@ -8,6 +8,44 @@ const d = useDashboard();
 const video = computed(() => d.videos.value.find((v) => v.id === d.openId.value) ?? null);
 const ready = computed(() => video.value?.status === "ready");
 const close = () => (d.openId.value = null);
+
+// ----- Saltar intro
+const frame = ref<HTMLIFrameElement>();
+const introStart = ref<number | null>(null);
+const introEnd = ref<number | null>(null);
+const savingIntro = ref(false);
+watch(
+  () => [video.value?.id, video.value?.intro?.start, video.value?.intro?.end],
+  () => {
+    introStart.value = video.value?.intro?.start ?? null;
+    introEnd.value = video.value?.intro?.end ?? null;
+  },
+  { immediate: true },
+);
+const introDirty = computed(() => introStart.value !== (video.value?.intro?.start ?? null) || introEnd.value !== (video.value?.intro?.end ?? null));
+/** El reproductor de la vista previa es del mismo dominio: se puede leer su tiempo actual. */
+function markNow(which: "start" | "end") {
+  try {
+    const t0 = frame.value?.contentDocument?.querySelector("video")?.currentTime;
+    if (t0 == null) return;
+    if (which === "start") introStart.value = Math.floor(t0);
+    else introEnd.value = Math.ceil(t0);
+  } catch {
+    /* otro dominio: no disponible */
+  }
+}
+async function saveIntro() {
+  if (!video.value) return;
+  const empty = introEnd.value == null;
+  savingIntro.value = true;
+  await d.actions.setIntro(video.value, empty ? null : { start: introStart.value ?? 0, end: introEnd.value! });
+  savingIntro.value = false;
+}
+async function clearIntro() {
+  if (!video.value) return;
+  introStart.value = introEnd.value = null;
+  if (video.value.intro) await d.actions.setIntro(video.value, null);
+}
 </script>
 
 <template>
@@ -17,6 +55,7 @@ const close = () => (d.openId.value = null);
         <div class="overflow-hidden rounded-2xl bg-black">
           <iframe
             v-if="ready"
+            ref="frame"
             :key="video.id"
             :src="video.embedUrl"
             :title="video.title"
@@ -66,6 +105,35 @@ const close = () => (d.openId.value = null);
             <span class="block text-xs text-secondary">{{ t("video.modal.allowDownloadHint") }}</span>
           </span>
           <UiToggle :model-value="video.allowDownload" :label="t('video.modal.allowDownload')" @update:model-value="(v) => d.actions.setAllowDownload(video!, v)" />
+        </div>
+
+        <!-- Saltar intro -->
+        <div class="rounded-2xl bg-button px-4 py-3">
+          <div class="flex items-center justify-between gap-2">
+            <span class="flex items-center gap-1.5 text-sm font-bold text-contrast"><FastForward class="h-4 w-4" />{{ t("video.intro.title") }}</span>
+            <UiBadge :color="video.intro ? 'brand' : 'gray'" :dot="false">{{ video.intro ? t("video.intro.own") : t("video.intro.default") }}</UiBadge>
+          </div>
+          <div class="mt-2.5 grid grid-cols-2 gap-2">
+            <div class="min-w-0">
+              <span class="mb-1 block text-xs font-semibold text-secondary">{{ t("video.intro.from") }}</span>
+              <div class="flex gap-1">
+                <DashTimeInput v-model="introStart" :label="t('video.intro.from')" class="!bg-raised" />
+                <UiButton v-if="ready" size="sm" color="transparent" icon-only class="!h-9 shrink-0" :title="t('video.intro.now')" :aria-label="t('video.intro.now')" @click="markNow('start')"><Clock /></UiButton>
+              </div>
+            </div>
+            <div class="min-w-0">
+              <span class="mb-1 block text-xs font-semibold text-secondary">{{ t("video.intro.to") }}</span>
+              <div class="flex gap-1">
+                <DashTimeInput v-model="introEnd" :label="t('video.intro.to')" placeholder="1:30" class="!bg-raised" />
+                <UiButton v-if="ready" size="sm" color="transparent" icon-only class="!h-9 shrink-0" :title="t('video.intro.now')" :aria-label="t('video.intro.now')" @click="markNow('end')"><Clock /></UiButton>
+              </div>
+            </div>
+          </div>
+          <p class="mt-2 text-xs text-secondary">{{ t("video.intro.hint") }}</p>
+          <div class="mt-2.5 flex flex-wrap gap-2">
+            <UiButton size="sm" color="brand" :disabled="!introDirty || savingIntro" @click="saveIntro">{{ t("common.save") }}</UiButton>
+            <UiButton v-if="video.intro || introStart != null || introEnd != null" size="sm" color="transparent" @click="clearIntro">{{ t("video.intro.clear") }}</UiButton>
+          </div>
         </div>
 
         <div :class="ready ? '' : 'pointer-events-none opacity-50'">

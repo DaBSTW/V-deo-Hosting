@@ -22,6 +22,7 @@ useHead(() => ({
       :view-url="data.viewUrl"
       :qualify-after-sec="data.monetization?.qualifyAfterSec"
       :appearance="data.player"
+      :intro="data.intro"
       :resume-key="data.publicId"
       embed
     />

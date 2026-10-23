@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_INTRO_SEC } from "#shared/lib/player-settings";
 import { isPublicVideoId } from "#shared/lib/ids";
 import { requireApiUser } from "#srv/auth/session";
 import { HttpError, handler, type ApiRequest, json, methods, noContent, readJson } from "#srv/http";
@@ -21,12 +22,19 @@ const patchSchema = z
     title: z.string().trim().min(1, "titleRequired").max(200).optional(),
     folderId: z.string().max(40).nullable().optional(),
     allowDownload: z.boolean().optional(),
+    /** Tramo «Saltar intro» en segundos; `null` = usar la intro predeterminada del reproductor. */
+    intro: z
+      .object({ start: z.number().int().min(0).max(24 * 3600), end: z.number().int().min(0).max(24 * 3600) })
+      .refine((v) => v.end > v.start && v.end - v.start <= MAX_INTRO_SEC, "invalidIntro")
+      .nullable()
+      .optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), "nothingToUpdate");
 
 /**
  * PATCH /api/videos/:publicId — renombrar, mover de carpeta (`folderId: null` =
- * sin carpeta) o activar/desactivar la descarga pública (`allowDownload`).
+ * sin carpeta), activar/desactivar la descarga pública (`allowDownload`) o
+ * marcar la intro para el botón «Saltar intro» (`intro`).
  */
 const PATCH = handler(async (req) => {
   const user = await requireApiUser();

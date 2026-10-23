@@ -25,7 +25,7 @@ import { downloadTicketPath, mediaPath } from "./playback-token";
 import { recordDownload } from "./stats-buffer";
 import { getMonetizationSettings } from "../monetization/settings";
 import { getPremiumSettings } from "../premium/settings";
-import { resolvePlayer, type PlayerSettings } from "#shared/lib/player-settings";
+import { resolveIntro, resolvePlayer, type IntroRange, type PlayerSettings } from "#shared/lib/player-settings";
 
 /** Reutilización de URLs firmadas: una vista = render + source + poster. */
 const PLAYBACK_CACHE_MS = 60_000;
@@ -260,16 +260,19 @@ async function findOwned(userId: string, publicId: string): Promise<Video> {
 export async function updateVideo(
   userId: string,
   publicId: string,
-  patch: { title?: string; folderId?: string | null; allowDownload?: boolean },
+  patch: { title?: string; folderId?: string | null; allowDownload?: boolean; intro?: IntroRange | null },
 ): Promise<PublicVideo> {
   const video = await findOwned(userId, publicId);
   if (patch.folderId) await findOwnedFolder(userId, patch.folderId);
+  // La intro no puede pasar del final del video (si conocemos su duración).
+  if (patch.intro && video.durationSec && patch.intro.end > video.durationSec) throw new HttpError(400, "invalidIntro");
   const updated = await prisma.video.update({
     where: { id: video.id },
     data: {
       ...(patch.title !== undefined && { title: patch.title }),
       ...(patch.folderId !== undefined && { folderId: patch.folderId }),
       ...(patch.allowDownload !== undefined && { allowDownload: patch.allowDownload }),
+      ...(patch.intro !== undefined && { introStartSec: patch.intro?.start ?? null, introEndSec: patch.intro?.end ?? null }),
     },
   });
   return toPublicVideo(updated);
@@ -364,6 +367,8 @@ export type EmbedLookup =
       monetization: { qualifyAfterSec: number; adSnippet: string } | null;
       /** Personalización del reproductor del dueño. */
       player: PlayerSettings;
+      /** Tramo para «Saltar intro» (la del video o la predeterminada), o `null`. */
+      intro: IntroRange | null;
     };
 
 export interface PublicDownloadOption {
@@ -373,6 +378,9 @@ export interface PublicDownloadOption {
   height: number | null;
   sizeBytes: number | null;
 }
+
+const introOf = (v: Video): IntroRange | null =>
+  v.introStartSec != null && v.introEndSec != null && v.introEndSec > v.introStartSec ? { start: v.introStartSec, end: v.introEndSec } : null;
 
 const downloadsEnabled = (v: Video) => v.allowDownload && getCoreEnv().ALLOW_DOWNLOADS;
 
@@ -392,6 +400,7 @@ export async function getEmbedPlayback(publicId: string, viewer: { premium: bool
   // El adaptador decide formato (HLS/MP4) y si hay miniatura; nosotros
   // sustituimos sus URLs por rutas propias antes de enviarlas al navegador.
   const [real, mon] = await Promise.all([providerPlayback(video), getMonetizationSettings()]);
+  const player = resolvePlayer(video.user.playerSettings);
   const downloads = downloadsEnabled(video)
     ? getAdapter(video.provider)
         .listDownloadOptions(refOf(video), Number(video.sizeBytes))
@@ -407,7 +416,8 @@ export async function getEmbedPlayback(publicId: string, viewer: { premium: bool
         ? // Premium: sin anuncios, pero el aviso de «vista completa» sigue (cuenta para el reparto de Premium).
           { qualifyAfterSec: mon.minWatchSeconds, adSnippet: viewer.premium ? "" : mon.monetagPlayerSnippet }
         : null,
-    player: resolvePlayer(video.user.playerSettings),
+    player,
+    intro: resolveIntro(introOf(video), player),
     title: video.title,
     durationSec: video.durationSec,
     source: {

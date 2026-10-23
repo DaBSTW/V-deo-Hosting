@@ -31,5 +31,6 @@ export type PublicPlayback =
       embedUrl: string;
       viewer: { premium: boolean };
       player: PlayerSettings;
+      intro: { start: number; end: number } | null;
       offer: PremiumOffer | null;
     };

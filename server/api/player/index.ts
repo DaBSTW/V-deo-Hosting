@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireApiUser } from "#srv/auth/session";
 import { handler, json, methods, readJson } from "#srv/http";
 import { prisma } from "#srv/prisma";
-import { PLAYER_COLORS, WATERMARK_POSITIONS, resolvePlayer } from "#shared/lib/player-settings";
+import { MAX_INTRO_SEC, PLAYER_COLORS, WATERMARK_POSITIONS, resolvePlayer } from "#shared/lib/player-settings";
 
 const https = z.string().max(500).refine((v) => v === "" || /^https:\/\/[^\s"'<>]+$/.test(v), "httpsRequired");
 const schema = z.object({
@@ -22,6 +22,14 @@ const schema = z.object({
   resume: z.boolean(),
   speed: z.boolean(),
   pip: z.boolean(),
+  skipIntro: z
+    .object({
+      enabled: z.boolean(),
+      auto: z.boolean(),
+      defaultStart: z.number().int().min(0).max(3 * 3600),
+      defaultEnd: z.number().int().min(0).max(3 * 3600),
+    })
+    .refine((v) => v.defaultEnd === 0 || (v.defaultEnd > v.defaultStart && v.defaultEnd - v.defaultStart <= MAX_INTRO_SEC), "invalidIntro"),
 });
 
 /** GET /api/player — personalización del reproductor del usuario (+ colores sugeridos). */

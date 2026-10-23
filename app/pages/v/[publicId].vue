@@ -37,6 +37,7 @@ const qualityLabel = (o: { kind: string; height: number | null }) =>
           :view-url="data.viewUrl"
           :qualify-after-sec="data.monetization?.qualifyAfterSec"
           :appearance="data.player"
+          :intro="data.intro"
           :resume-key="data.publicId"
         />
         <PlayerMessage v-else :title="data.title" :kind="data.state" :message="data.state === 'processing' ? t('player.processing') : t('player.unavailable')" />

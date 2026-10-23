@@ -11,7 +11,8 @@ import type Plyr from "plyr";
 import { detectAdblock } from "~/lib/adblock";
 import { messagesFor } from "#shared/i18n/messages";
 import type { PlaybackSource } from "#srv/video-providers/types";
-import { DEFAULT_PLAYER, contrastOn, type PlayerSettings } from "#shared/lib/player-settings";
+import { DEFAULT_PLAYER, contrastOn, type IntroRange, type PlayerSettings } from "#shared/lib/player-settings";
+import { ChevronsRight } from "lucide-vue-next";
 
 const props = withDefaults(
   defineProps<{
@@ -28,8 +29,10 @@ const props = withDefaults(
     embed?: boolean;
     /** Identificador para recordar por dónde iba el espectador (`resume`). */
     resumeKey?: string;
+    /** Tramo de la intro para «Saltar intro» (ya resuelto por el servidor). */
+    intro?: IntroRange | null;
   }>(),
-  { autoPlay: false, appearance: () => DEFAULT_PLAYER, embed: false, resumeKey: undefined },
+  { autoPlay: false, appearance: () => DEFAULT_PLAYER, embed: false, resumeKey: undefined, intro: null },
 );
 
 const { t, locale } = useI18n();
@@ -41,6 +44,13 @@ const look = computed(() => props.appearance);
 const accentStyle = computed(() => ({ "--player-accent": look.value.color, "--player-on-accent": contrastOn(look.value.color) }));
 const wm = computed(() => look.value.watermark);
 const showWatermark = computed(() => (wm.value.type === "text" && wm.value.text.trim()) || (wm.value.type === "image" && wm.value.imageUrl));
+/** «Saltar intro»: visible mientras la reproducción está dentro del tramo. */
+const inIntro = ref(false);
+const skipIntro = () => {
+  if (props.intro && videoEl.value) videoEl.value.currentTime = props.intro.end;
+  inIntro.value = false;
+};
+
 /** Inicio automático: por URL (?autoplay=1) o por la personalización (solo insertado, en silencio). */
 const autoStart = computed(() => props.autoPlay || (props.embed && look.value.autoplay));
 
@@ -138,6 +148,31 @@ onMounted(() => {
       video.removeEventListener("loadedmetadata", onMeta);
       video.removeEventListener("timeupdate", onSave);
       video.removeEventListener("ended", onEnd);
+    });
+  }
+
+  // Saltar intro: botón durante el tramo o salto automático (una sola vez, por
+  // si el espectador vuelve atrás a propósito para verla).
+  {
+    let autoDone = false;
+    const onIntroTime = () => {
+      const r = props.intro;
+      if (!r || !look.value.skipIntro.enabled) return (inIntro.value = false);
+      const now = video.currentTime;
+      const inside = now >= r.start && now < r.end - 0.5;
+      if (inside && look.value.skipIntro.auto && !autoDone && !video.paused) {
+        autoDone = true;
+        video.currentTime = r.end;
+        inIntro.value = false;
+        return;
+      }
+      inIntro.value = inside;
+    };
+    video.addEventListener("timeupdate", onIntroTime);
+    video.addEventListener("seeked", onIntroTime);
+    disposers.push(() => {
+      video.removeEventListener("timeupdate", onIntroTime);
+      video.removeEventListener("seeked", onIntroTime);
     });
   }
 
@@ -255,6 +290,11 @@ onBeforeUnmount(() => cleanup?.());
         <img v-if="wm.type === 'image'" :src="wm.imageUrl" alt="" referrerpolicy="no-referrer" />
         <span v-else>{{ wm.text }}</span>
       </component>
+      <Transition name="skip">
+        <button v-if="inIntro" type="button" class="player-skip" @click.stop="skipIntro">
+          {{ t("player.skipIntro") }}<ChevronsRight class="h-4 w-4" />
+        </button>
+      </Transition>
     </Teleport>
     <div v-if="failed" class="absolute inset-0 flex items-center justify-center bg-black/80 px-6 text-center text-sm font-semibold text-white">
       {{ t("player.failed") }}
@@ -295,6 +335,42 @@ onBeforeUnmount(() => cleanup?.());
   font: 800 15px/1.2 var(--font-sans);
   color: #fff;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+}
+.player-skip {
+  position: absolute;
+  right: 16px;
+  bottom: 64px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  font: 700 14px/1 var(--font-sans);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.player-skip:hover {
+  background: var(--player-accent, var(--brand));
+  border-color: transparent;
+  color: var(--player-on-accent, #000);
+}
+/* Si la marca de agua está abajo a la derecha, el botón queda por encima. */
+.player-wm--br ~ .player-skip {
+  bottom: 108px;
+}
+.skip-enter-active,
+.skip-leave-active {
+  transition: opacity 0.2s, transform 0.2s;
+}
+.skip-enter-from,
+.skip-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
 }
 .player-wm--tl { top: 14px; left: 16px; }
 .player-wm--tr { top: 14px; right: 16px; }

@@ -30,6 +30,8 @@ export interface VideoActions {
   remove: (v: PublicVideo) => void;
   removeMany: (ids: string[]) => void;
   setAllowDownload: (v: PublicVideo, allow: boolean) => void;
+  /** Guarda la intro de «Saltar intro» (`null` = usar la predeterminada). Devuelve si se guardó. */
+  setIntro: (v: PublicVideo, intro: { start: number; end: number } | null) => Promise<boolean>;
 }
 
 export interface DashboardUser {
@@ -214,6 +216,17 @@ export function createDashboard(initial: DashboardInitial): DashboardStore {
       } catch (err) {
         videos.value = videos.value.map((x) => (x.id === v.id ? { ...x, allowDownload: !allow } : x));
         notify(errMsg(err));
+      }
+    },
+    setIntro: async (v, intro) => {
+      try {
+        const { video } = await api<{ video: PublicVideo }>(`/api/videos/${v.id}`, { method: "PATCH", body: JSON.stringify({ intro }) });
+        videos.value = videos.value.map((x) => (x.id === video.id ? video : x));
+        notify(intro ? t("video.intro.saved") : t("video.intro.cleared"));
+        return true;
+      } catch (err) {
+        notify(errMsg(err));
+        return false;
       }
     },
     remove: (v) =>

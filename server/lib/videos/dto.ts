@@ -18,6 +18,8 @@ export interface PublicVideo {
   createdAt: string;
   folderId: string | null;
   allowDownload: boolean;
+  /** Intro propia para «Saltar intro» (segundos) o `null` (se usa la predeterminada). */
+  intro: { start: number; end: number } | null;
   views: number;
   downloads: number;
   /** Ruta propia firmada (`/media/.../poster`) o `null` si aún no hay miniatura. */
@@ -57,6 +59,7 @@ export function toPublicVideo(v: Video): PublicVideo {
     createdAt: v.createdAt.toISOString(),
     folderId: v.folderId,
     allowDownload: v.allowDownload,
+    intro: v.introStartSec != null && v.introEndSec != null ? { start: v.introStartSec, end: v.introEndSec } : null,
     views: v.views,
     downloads: v.downloads,
     thumbnailUrl: v.hasThumbnail && v.status === "READY" ? mediaPath(v.publicId, "poster") : null,

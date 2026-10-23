@@ -101,6 +101,9 @@ model Video {
   hasThumbnail  Boolean          @default(false)
   /// El dueño permite descargar el archivo desde la página pública.
   allowDownload Boolean          @default(true)
+  /// Intro para el botón «Saltar intro» (segundos). Sin valor: se usa la del reproductor.
+  introStartSec Int?
+  introEndSec   Int?
   durationSec   Float?
   sizeBytes     BigInt           @default(0)
   mimeType      String?

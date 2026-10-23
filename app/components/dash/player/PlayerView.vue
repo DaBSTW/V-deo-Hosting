@@ -3,8 +3,8 @@
  * Panel → Reproductor: personaliza el reproductor de todos tus videos (en el
  * enlace directo y en los insertados), con vista previa en vivo.
  */
-import { Check, Code, Image as ImageIcon, MonitorPlay, Palette, Play, RotateCcw, Type } from "lucide-vue-next";
-import { DEFAULT_PLAYER, WATERMARK_POSITIONS, contrastOn, type PlayerSettings } from "#shared/lib/player-settings";
+import { Check, ChevronsRight, Code, Image as ImageIcon, MonitorPlay, Palette, Play, RotateCcw, Type } from "lucide-vue-next";
+import { DEFAULT_PLAYER, WATERMARK_POSITIONS, contrastOn, resolveIntro, type PlayerSettings } from "#shared/lib/player-settings";
 import type { PublicPlayback } from "~/types/video";
 
 const d = useDashboard();
@@ -51,8 +51,21 @@ const reset = () => (settings.value = structuredClone(DEFAULT_PLAYER));
 /** Los controles y el bucle se fijan al crear el reproductor: cambiarlos lo vuelve a montar. */
 const previewKey = computed(() => {
   const s = settings.value;
-  return s ? `${s.speed}${s.pip}${s.loop}${s.resume}${s.autoplay}${embedMode.value}` : "";
+  return s ? `${s.speed}${s.pip}${s.loop}${s.resume}${s.autoplay}${s.skipIntro.auto}${embedMode.value}` : "";
 });
+/** Intro predeterminada editable como «sin valor» cuando el fin es 0. */
+const defStart = computed({
+  get: () => (settings.value?.skipIntro.defaultEnd ? settings.value.skipIntro.defaultStart : null),
+  set: (v: number | null) => settings.value && (settings.value.skipIntro.defaultStart = v ?? 0),
+});
+const defEnd = computed({
+  get: () => (settings.value?.skipIntro.defaultEnd || null),
+  set: (v: number | null) => settings.value && (settings.value.skipIntro.defaultEnd = v ?? 0),
+});
+/** Intro de la vista previa: la del video de ejemplo o la predeterminada. */
+const previewIntro = computed(() => (settings.value ? resolveIntro(previewOwnIntro.value, settings.value) : null));
+const previewOwnIntro = computed(() => d.videos.value.find((v) => v.id === preview.value?.publicId)?.intro ?? null);
+
 const positionLabel = (p: string) => t.dynamic(`playerSettings.positions.${p}`);
 const toggles = ["showTitle", "autoplay", "loop", "resume", "speed", "pip"] as const;
 </script>
@@ -132,6 +145,39 @@ const toggles = ["showTitle", "autoplay", "loop", "resume", "speed", "pip"] as c
         </template>
       </DashCard>
 
+      <DashCard :title="t('playerSettings.introTitle')" :subtitle="t('playerSettings.introSubtitle')">
+        <ul class="divide-y divide-divider">
+          <li class="flex items-center justify-between gap-4 pb-3">
+            <div class="min-w-0">
+              <p class="font-bold text-contrast">{{ t("playerSettings.introEnabled") }}</p>
+              <p class="text-sm text-secondary">{{ t("playerSettings.introEnabledHint") }}</p>
+            </div>
+            <UiToggle v-model="settings.skipIntro.enabled" :label="t('playerSettings.introEnabled')" />
+          </li>
+          <li :class="['flex items-center justify-between gap-4 py-3', settings.skipIntro.enabled ? '' : 'pointer-events-none opacity-50']">
+            <div class="min-w-0">
+              <p class="font-bold text-contrast">{{ t("playerSettings.introAuto") }}</p>
+              <p class="text-sm text-secondary">{{ t("playerSettings.introAutoHint") }}</p>
+            </div>
+            <UiToggle v-model="settings.skipIntro.auto" :label="t('playerSettings.introAuto')" />
+          </li>
+          <li :class="['pt-3', settings.skipIntro.enabled ? '' : 'pointer-events-none opacity-50']">
+            <p class="font-bold text-contrast">{{ t("playerSettings.introDefault") }}</p>
+            <p class="text-sm text-secondary">{{ t("playerSettings.introDefaultHint") }}</p>
+            <div class="mt-2.5 grid max-w-sm grid-cols-2 gap-2">
+              <label class="block min-w-0">
+                <span class="mb-1 block text-xs font-semibold text-secondary">{{ t("video.intro.from") }}</span>
+                <DashTimeInput v-model="defStart" :label="t('video.intro.from')" />
+              </label>
+              <label class="block min-w-0">
+                <span class="mb-1 block text-xs font-semibold text-secondary">{{ t("video.intro.to") }}</span>
+                <DashTimeInput v-model="defEnd" :label="t('video.intro.to')" placeholder="1:30" />
+              </label>
+            </div>
+          </li>
+        </ul>
+      </DashCard>
+
       <DashCard :title="t('playerSettings.behaviorTitle')" :subtitle="t('playerSettings.behaviorSubtitle')">
         <ul class="divide-y divide-divider">
           <li v-for="k in toggles" :key="k" class="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
@@ -167,6 +213,7 @@ const toggles = ["showTitle", "autoplay", "loop", "resume", "speed", "pip"] as c
               :title="preview.title"
               :appearance="settings"
               :embed="embedMode"
+              :intro="previewIntro"
             />
             <!-- Sin videos: maqueta estática con los mismos colores y marcas. -->
             <div v-else class="relative h-full w-full bg-[radial-gradient(80%_80%_at_30%_20%,#2a2d33,#0b0c0e)]">
@@ -185,6 +232,11 @@ const toggles = ["showTitle", "autoplay", "loop", "resume", "speed", "pip"] as c
                 <div class="h-1 flex-1 rounded-full bg-white/30"><div class="h-full w-1/3 rounded-full" :style="{ background: settings.color }" /></div>
                 <span class="text-xs text-white/80">1:24 / 4:10</span>
               </div>
+              <span
+                v-if="settings.skipIntro.enabled && settings.skipIntro.defaultEnd"
+                class="absolute bottom-14 right-4 inline-flex items-center gap-1.5 rounded-[10px] border border-white/35 bg-black/60 px-3 py-2 text-xs font-bold text-white"
+                >{{ t("player.skipIntro") }}<ChevronsRight class="h-3.5 w-3.5"
+              /></span>
               <p class="absolute inset-x-0 bottom-12 text-center text-xs font-semibold text-white/60">{{ t("playerSettings.noVideo") }}</p>
             </div>
           </div>
