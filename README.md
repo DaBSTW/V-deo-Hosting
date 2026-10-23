@@ -122,6 +122,9 @@ workers/r2-event-forwarder               (opcional) Worker: eventos R2 → webho
 | `POST`   | `/api/premium/sync`          | `{ subscriptionId? }` → relee la suscripción en PayPal y renueva el pase Premium |
 | `POST`   | `/api/premium/cancel`        | Cancela la renovación (se conserva el periodo pagado) |
 | `POST`   | `/api/webhooks/paypal`       | Avisos de PayPal: solo disparan una relectura de la suscripción |
+| `GET`/`PUT` | `/api/player`             | Personalización del reproductor del usuario |
+| `GET`    | `/api/admin/users`           | (admin) Buscar cuentas (`?q=`, `?suspended=1`) |
+| `PATCH`  | `/api/admin/users/:id`       | (admin) `{ monetizationEnabled }`: suspender / reactivar |
 | `GET`/`PUT`/`POST` | `/api/admin/premium` | (admin) Ajustes, resumen y acciones `syncPlans` / `syncAll` |
 
 `upload` es una instrucción genérica, igual sea cual sea el proveedor:
@@ -343,6 +346,27 @@ por método, pero no bajarlo de 25.
   aplica a los meses que cierres después (los Términos piden avisar a los usuarios con antelación).
 * Indica siempre los ingresos totales al cerrar: es lo que garantiza que nunca repartes más de lo que cobras.
 * No anuncies importes fijos («$1,50 por cada 1.000 vistas»): el RPM real cambia cada mes y por país.
+
+## Reproductor personalizable
+
+En **Panel → Reproductor** cada creador ajusta el reproductor de todos sus videos (enlace `/v` e insertado
+`/embed`), con vista previa en vivo:
+
+* **Color** de los controles (8 sugeridos o cualquiera).
+* **Logo o marca de agua** (texto o imagen HTTPS), con enlace opcional, esquina y opacidad. Se muestra
+  dentro del reproductor, también en pantalla completa.
+* **Inicio automático** (solo insertado y en silencio), **bucle**, **título** en el insertado,
+  **continuar donde lo dejó** (posición guardada en el navegador del espectador), y los controles de
+  **velocidad** e **imagen en imagen**.
+
+Se guarda en `User.playerSettings` (JSON) y viaja en la misma consulta que ya hace la página del video:
+sin coste extra para el VPS. Los cambios afectan también a los iframes ya insertados.
+
+## Cuentas (administración)
+
+La monetización está siempre activa. En **Administración → Cuentas** puedes buscar una cuenta y
+**suspender** su monetización (p. ej. por fraude): sus videos se ven sin anuncios y no suman vistas
+monetizadas ni Premium; el saldo ya acreditado se conserva. **Reactivar** la devuelve a la normalidad.
 
 ## Premium (suscripción sin anuncios)
 

@@ -25,6 +25,7 @@ import { downloadTicketPath, mediaPath } from "./playback-token";
 import { recordDownload } from "./stats-buffer";
 import { getMonetizationSettings } from "../monetization/settings";
 import { getPremiumSettings } from "../premium/settings";
+import { resolvePlayer, type PlayerSettings } from "#shared/lib/player-settings";
 
 /** Reutilización de URLs firmadas: una vista = render + source + poster. */
 const PLAYBACK_CACHE_MS = 60_000;
@@ -361,6 +362,8 @@ export type EmbedLookup =
       viewUrl: string;
       /** `null` si el video no está monetizado. */
       monetization: { qualifyAfterSec: number; adSnippet: string } | null;
+      /** Personalización del reproductor del dueño. */
+      player: PlayerSettings;
     };
 
 export interface PublicDownloadOption {
@@ -380,7 +383,7 @@ const downloadsEnabled = (v: Video) => v.allowDownload && getCoreEnv().ALLOW_DOW
 export async function getEmbedPlayback(publicId: string, viewer: { premium: boolean } = { premium: false }): Promise<EmbedLookup> {
   const video = await prisma.video.findUnique({
     where: { publicId },
-    include: { user: { select: { monetizationEnabled: true } } },
+    include: { user: { select: { monetizationEnabled: true, playerSettings: true } } },
   });
   if (!video) return { state: "not_found" };
   if (video.status === "ERROR") return { state: "error", title: video.title };
@@ -404,6 +407,7 @@ export async function getEmbedPlayback(publicId: string, viewer: { premium: bool
         ? // Premium: sin anuncios, pero el aviso de «vista completa» sigue (cuenta para el reparto de Premium).
           { qualifyAfterSec: mon.minWatchSeconds, adSnippet: viewer.premium ? "" : mon.monetagPlayerSnippet }
         : null,
+    player: resolvePlayer(video.user.playerSettings),
     title: video.title,
     durationSec: video.durationSec,
     source: {

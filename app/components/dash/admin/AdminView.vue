@@ -200,6 +200,8 @@ const methodCfg = (m: PayoutMethod) => {
 
     <DashAdminPremium />
 
+    <DashAdminAccounts />
+
     <!-- Verificaciones de identidad -->
 
     <DashCard :title="t('admin.kycTitle')" :subtitle="t('admin.kycSubtitle')">

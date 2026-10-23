@@ -26,6 +26,7 @@ const inApp = computed(() => route.path === "/dashboard" || route.path.startsWit
 const nav = computed(() => [
   { label: t("landing.nav.features"), to: "/#features" },
   { label: t("landing.nav.howItWorks"), to: "/#how" },
+  { label: t("landing.nav.player"), to: "/#player" },
   { label: t("landing.nav.monetization"), to: "/#monetization" },
   { label: t("landing.nav.faq"), to: "/#faq" },
 ]);

@@ -15,6 +15,7 @@ export type FolderFilter =
   | { kind: "overview" }
   | { kind: "monetization" }
   | { kind: "premium" }
+  | { kind: "player" }
   | { kind: "admin" }
   | { kind: "all" }
   | { kind: "none" }
@@ -112,6 +113,7 @@ export function createDashboard(initial: DashboardInitial): DashboardStore {
     const folder = typeof route.query.folder === "string" ? route.query.folder : undefined;
     if (folder === "monetization") return { kind: "monetization" };
     if (folder === "premium") return { kind: "premium" };
+    if (folder === "player") return { kind: "player" };
     if (folder === "admin" && initial.user.isAdmin) return { kind: "admin" };
     if (folder === "all") return { kind: "all" };
     if (folder === "none") return { kind: "none" };

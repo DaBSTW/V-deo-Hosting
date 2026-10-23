@@ -1,5 +1,5 @@
 /** Operaciones del panel de administración de monetización. */
-import type { PayoutStatus } from "@prisma/client";
+import { Prisma, type PayoutStatus } from "@prisma/client";
 import { prisma } from "#srv/prisma";
 import { HttpError } from "../http";
 import { flushStats } from "../videos/stats-buffer";
@@ -98,4 +98,55 @@ export async function processPayout(id: string, action: keyof typeof TRANSITIONS
     },
   });
   if (count === 0) throw new HttpError(409, "payoutAlreadyProcessed");
+}
+
+// ---------------------------------------------------------------------------
+// Cuentas: suspender / reactivar la monetización
+// ---------------------------------------------------------------------------
+const userSelect = {
+  id: true,
+  email: true,
+  name: true,
+  monetizationEnabled: true,
+  createdAt: true,
+  _count: { select: { videos: true } },
+} as const;
+
+type AdminUserRow = Prisma.UserGetPayload<{ select: typeof userSelect }>;
+const toAdminUser = (u: AdminUserRow) => ({
+  id: u.id,
+  email: u.email,
+  name: u.name,
+  monetizationEnabled: u.monetizationEnabled,
+  videos: u._count.videos,
+  createdAt: u.createdAt.toISOString(),
+});
+export type AdminUser = ReturnType<typeof toAdminUser>;
+
+/** Busca cuentas por email o nombre; con `suspendedOnly`, solo las suspendidas. */
+export async function listAdminUsers(q: string, suspendedOnly: boolean): Promise<AdminUser[]> {
+  const rows = await prisma.user.findMany({
+    where: {
+      ...(q ? { OR: [{ email: { contains: q, mode: "insensitive" } }, { name: { contains: q, mode: "insensitive" } }] } : {}),
+      ...(suspendedOnly ? { monetizationEnabled: false } : {}),
+    },
+    orderBy: { createdAt: "desc" },
+    take: 25,
+    select: userSelect,
+  });
+  return rows.map(toAdminUser);
+}
+
+/**
+ * Suspende o reactiva la monetización de una cuenta. Mientras está suspendida,
+ * sus videos se ven sin anuncios y no suman vistas monetizadas ni Premium
+ * (lo filtra el volcado de estadísticas); el saldo ya acreditado se conserva.
+ */
+export async function setUserMonetization(id: string, enabled: boolean): Promise<AdminUser> {
+  try {
+    return toAdminUser(await prisma.user.update({ where: { id }, data: { monetizationEnabled: enabled }, select: userSelect }));
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") throw new HttpError(404, "userNotFound");
+    throw err;
+  }
 }

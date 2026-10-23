@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { PLAYER_COLORS, contrastOn } from "#shared/lib/player-settings";
 import {
   ArrowRight,
   ChartNoAxesColumn,
@@ -9,11 +10,16 @@ import {
   FolderOpen,
   Gauge,
   Globe,
+  History,
   Languages,
   Lock,
   MonitorPlay,
+  Palette,
+  Play,
   Plus,
+  Repeat,
   ShieldCheck,
+  Stamp,
   Timer,
   Upload,
   Zap,
@@ -64,6 +70,15 @@ const example = computed(() => ({ rpm: fmt.formatUsd(1.5), creator: fmt.formatUs
 const openFaq = ref<number | null>(1);
 
 /** «Velocidad sin límite» solo se anuncia si los gratuitos la tienen limitada. */
+/** Sección «Reproductor personalizable»: muestras de color para probar en vivo. */
+const demoColor = ref<string>(PLAYER_COLORS[0]);
+const playerPoints = [
+  { key: "color", icon: Palette },
+  { key: "brand", icon: Stamp },
+  { key: "behavior", icon: Repeat },
+  { key: "resume", icon: History },
+] as const;
+
 const premiumBenefits = computed(() =>
   [
     { key: "noAds", icon: MonitorPlay },
@@ -177,6 +192,54 @@ function faqAnswer(n: number): string {
       </div>
     </section>
 
+    <!-- Reproductor personalizable -->
+    <section id="player" class="scroll-mt-20 bg-bg-soft py-24">
+      <div class="mx-auto grid max-w-[1280px] grid-cols-1 items-center gap-12 px-4 sm:px-6 lg:grid-cols-2">
+        <!-- Maqueta interactiva: el color cambia al pulsar las muestras -->
+        <div class="order-2 min-w-0 lg:order-1">
+          <div class="relative aspect-video overflow-hidden rounded-2xl bg-[radial-gradient(80%_80%_at_30%_20%,#2a2d33,#0b0c0e)] shadow-floating">
+            <div class="absolute inset-x-0 top-0 bg-gradient-to-b from-black/70 to-transparent px-5 pb-8 pt-4 text-sm font-bold text-white">{{ t("landing.player.sampleTitle") }}</div>
+            <span class="absolute right-5 top-12 text-sm font-extrabold text-white/80 [text-shadow:0_1px_4px_rgba(0,0,0,.7)]">{{ t("landing.player.sampleBrand") }}</span>
+            <span class="absolute left-1/2 top-1/2 grid h-16 w-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full transition-colors" :style="{ background: demoColor, color: contrastOn(demoColor) }"><Play class="ml-1 h-7 w-7 fill-current" /></span>
+            <div class="absolute inset-x-5 bottom-5 flex items-center gap-3">
+              <Play class="h-4 w-4 fill-white text-white" />
+              <div class="h-1.5 flex-1 rounded-full bg-white/25"><div class="h-full w-2/5 rounded-full transition-colors" :style="{ background: demoColor }" /></div>
+              <span class="text-xs font-semibold text-white/80">1:24 / 4:10</span>
+            </div>
+          </div>
+          <div class="mt-4 flex flex-wrap items-center justify-center gap-2.5">
+            <button
+              v-for="c in PLAYER_COLORS"
+              :key="c"
+              type="button"
+              :aria-label="t('landing.player.tryColor', { color: c })"
+              :aria-pressed="demoColor === c"
+              class="press h-8 w-8 rounded-full ring-offset-2 ring-offset-[var(--surface-1-5)] transition hover:scale-110"
+              :class="demoColor === c ? 'ring-2 ring-[var(--text-contrast)]' : ''"
+              :style="{ background: c }"
+              @click="demoColor = c"
+            />
+          </div>
+        </div>
+        <div class="order-1 min-w-0 lg:order-2">
+          <HomeSectionHeading :eyebrow="t('landing.player.eyebrow')" :title="t('landing.player.title')" :subtitle="t('landing.player.text')" />
+          <ul class="mt-7 grid gap-3 sm:grid-cols-2">
+            <li v-for="p in playerPoints" :key="p.key" class="flex items-start gap-3 rounded-2xl bg-raised p-4">
+              <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-highlight text-brand"><component :is="p.icon" class="h-[18px] w-[18px]" /></span>
+              <span class="min-w-0">
+                <span class="block font-extrabold text-contrast">{{ t.dynamic(`landing.player.${p.key}Title`) }}</span>
+                <span class="block text-sm text-secondary">{{ t.dynamic(`landing.player.${p.key}Text`) }}</span>
+              </span>
+            </li>
+          </ul>
+          <UiButton :to="user ? '/dashboard?folder=player' : '/register'" color="brand" class="mt-7">
+            {{ user ? t("landing.player.ctaUser") : t("landing.player.cta") }}
+            <ArrowRight />
+          </UiButton>
+        </div>
+      </div>
+    </section>
+
     <!-- Monetización -->
     <section id="monetization" class="scroll-mt-20 px-4 sm:px-6">
       <div class="relative mx-auto grid max-w-[1280px] grid-cols-1 gap-10 overflow-hidden rounded-3xl border border-divider bg-surface p-6 sm:p-10 lg:grid-cols-2">
@@ -245,7 +308,7 @@ function faqAnswer(n: number): string {
     <section id="faq" class="mx-auto max-w-3xl scroll-mt-20 px-4 py-24 sm:px-6">
       <HomeSectionHeading center :eyebrow="t('landing.faq.eyebrow')" :title="t('landing.faq.title')" />
       <div class="mt-12 space-y-3">
-        <div v-for="n in 6" :key="n" class="overflow-hidden rounded-2xl bg-raised">
+        <div v-for="n in 7" :key="n" class="overflow-hidden rounded-2xl bg-raised">
           <button
             type="button"
             class="flex w-full items-center justify-between gap-4 px-5 py-4 text-left font-bold text-contrast"

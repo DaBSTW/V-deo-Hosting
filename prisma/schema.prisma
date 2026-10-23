@@ -42,11 +42,14 @@ model User {
   termsAcceptedAt DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+  /// Personalización del reproductor (ver shared/lib/player-settings.ts).
+  playerSettings  Json?
 
   videos  Video[]
   folders Folder[]
 
   // ---------------- Monetización ----------------
+  /// Siempre `true` salvo que el operador la suspenda (Administración → Cuentas).
   /// Si es `false`, sus videos no muestran anuncios y no generan ganancias.
   monetizationEnabled Boolean                @default(true)
   /// Método de cobro elegido (p. ej. PAYPAL, USDT_TRC20, PAYONEER).

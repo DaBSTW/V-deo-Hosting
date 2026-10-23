@@ -21,6 +21,9 @@ useHead(() => ({
       :auto-play="route.query.autoplay === '1'"
       :view-url="data.viewUrl"
       :qualify-after-sec="data.monetization?.qualifyAfterSec"
+      :appearance="data.player"
+      :resume-key="data.publicId"
+      embed
     />
     <PlayerMessage v-else :title="data.title" :kind="data.state" :message="data.state === 'processing' ? t('player.processing') : t('player.unavailable')" />
   </div>

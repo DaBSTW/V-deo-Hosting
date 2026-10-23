@@ -1,4 +1,5 @@
 import type { PlaybackSource } from "#srv/video-providers/types";
+import type { PlayerSettings } from "#shared/lib/player-settings";
 
 export interface DownloadChoice {
   id: string;
@@ -29,5 +30,6 @@ export type PublicPlayback =
       watchUrl: string;
       embedUrl: string;
       viewer: { premium: boolean };
+      player: PlayerSettings;
       offer: PremiumOffer | null;
     };

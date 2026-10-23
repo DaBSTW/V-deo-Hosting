@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** Barra lateral del panel: secciones, biblioteca, carpetas y almacenamiento. */
-import { ChartNoAxesColumn, CircleDollarSign, Crown, Ellipsis, Folder, FolderPlus, HardDrive, Inbox, Library, Pencil, ShieldCheck, Trash2, Upload } from "lucide-vue-next";
+import { ChartNoAxesColumn, CircleDollarSign, Crown, Ellipsis, MonitorPlay, Folder, FolderPlus, HardDrive, Inbox, Library, Pencil, ShieldCheck, Trash2, Upload } from "lucide-vue-next";
 import type { FolderFilter } from "~/composables/useDashboard";
 
 const emit = defineEmits<{ navigate: [] }>();
@@ -37,6 +37,7 @@ const pct = computed(() => (quotaBytes.value ? Math.min(100, (d.totalBytes.value
     <nav :aria-label="t('dashboard.menu')" class="rounded-2xl bg-raised p-2 shadow-card">
       <DashNavItem :icon="ChartNoAxesColumn" :label="t('sidebar.overview')" :active="isActive({ kind: 'overview' })" @select="go({ kind: 'overview' })" />
       <DashNavItem :icon="CircleDollarSign" :label="t('sidebar.monetization')" :active="isActive({ kind: 'monetization' })" @select="go({ kind: 'monetization' })" />
+      <DashNavItem :icon="MonitorPlay" :label="t('sidebar.player')" :active="isActive({ kind: 'player' })" @select="go({ kind: 'player' })" />
       <DashNavItem :icon="Crown" label="Premium" :active="isActive({ kind: 'premium' })" @select="go({ kind: 'premium' })" />
       <DashNavItem v-if="d.user.isAdmin" :icon="ShieldCheck" :label="t('sidebar.admin')" :active="isActive({ kind: 'admin' })" @select="go({ kind: 'admin' })" />
 
