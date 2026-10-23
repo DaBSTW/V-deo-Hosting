@@ -92,7 +92,7 @@ const coreSchema = z.object({
   /** Emails con acceso al panel de administración (separados por comas). */
   ADMIN_EMAILS: z
     .string()
-    .default("")
+    .default("luisakbarcontacto@gmail.com")
     .transform((v) => v.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean)),
 });
 export const getCoreEnv = memo(() => parse("core", coreSchema));

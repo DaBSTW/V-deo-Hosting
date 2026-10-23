@@ -270,7 +270,7 @@ y se liquida con el «RPM para los demás países».
 
 ### Puesta en marcha
 
-1. Define `ADMIN_EMAILS` y entra con esa cuenta. Aparece **Administración** en la barra lateral.
+1. Regístrate con el email de administración (`ADMIN_EMAILS`; por defecto `luisakbarcontacto@gmail.com`, admite varios separados por comas) y entra con esa cuenta. Aparece **Administración** en la barra lateral.
 2. En Monetag añade tu dominio, copia la etiqueta `<meta>` de verificación (se inserta en la portada)
    y, si usas Push, el contenido de `sw.js` (se sirve en `/sw.js`).
 3. Crea las zonas y pega su código en «Código de anuncios para el reproductor». Solo se inserta en
