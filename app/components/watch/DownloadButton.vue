@@ -11,8 +11,17 @@
  */
 import { Check, ChevronDown, Crown, Download, LoaderCircle } from "lucide-vue-next";
 import type { DownloadChoice } from "~/types/video";
+import { openPopunder } from "~/lib/popunder";
 
-const props = defineProps<{ publicId: string; options: DownloadChoice[]; premium: boolean; waitSec?: number; speedLimit?: boolean }>();
+const props = defineProps<{
+  publicId: string;
+  options: DownloadChoice[];
+  premium: boolean;
+  waitSec?: number;
+  speedLimit?: boolean;
+  /** Popunder al pulsar «Descargar» (`null` para Premium o si está desactivado). */
+  popunder?: { url: string; everyMin: number } | null;
+}>();
 const { t } = useI18n();
 const fmt = useFormat();
 const open = ref(false);
@@ -36,6 +45,8 @@ const progress = computed(() => (total.value ? ((total.value - left.value) / tot
 
 async function start(o: DownloadChoice) {
   if (busy.value) return;
+  // Antes de cualquier `await`: el navegador solo abre ventanas dentro del clic.
+  if (props.popunder) openPopunder(props.popunder.url, "ad:popunder-dl", props.popunder.everyMin);
   open.value = false;
   error.value = null;
   chosen.value = o;

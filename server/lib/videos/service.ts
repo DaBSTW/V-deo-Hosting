@@ -381,6 +381,7 @@ export interface PlayerAds {
   vastEveryMin: number;
   popunderUrl: string | null;
   popunderEveryMin: number;
+  popunderOnDownload: boolean;
 }
 
 export interface PublicDownloadOption {
@@ -435,7 +436,7 @@ export async function getEmbedPlayback(publicId: string, viewer: { premium: bool
     player,
     ads:
       mon.enabled && video.user.monetizationEnabled && !viewer.premium && (mon.vastTagUrl || mon.popunderUrl)
-        ? { vastUrl: mon.vastTagUrl || null, skipAfterSec: mon.vastSkipAfterSec, vastEveryMin: mon.vastEveryMin, popunderUrl: mon.popunderUrl || null, popunderEveryMin: mon.popunderEveryMin }
+        ? { vastUrl: mon.vastTagUrl || null, skipAfterSec: mon.vastSkipAfterSec, vastEveryMin: mon.vastEveryMin, popunderUrl: mon.popunderUrl || null, popunderEveryMin: mon.popunderEveryMin, popunderOnDownload: mon.popunderOnDownload }
         : null,
     intro: resolveIntro(introOf(video), player),
     subtitles: video.subtitles.map((s) => ({ id: s.id, lang: s.lang, label: s.label, isDefault: s.isDefault, src: subtitleSrc(publicId, s) })),

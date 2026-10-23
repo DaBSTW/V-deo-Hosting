@@ -14,6 +14,7 @@ import type { PlaybackSource } from "#srv/video-providers/types";
 import { DEFAULT_PLAYER, contrastOn, type IntroRange, type PlayerSettings } from "#shared/lib/player-settings";
 import { ChevronsRight, ExternalLink, Volume2, VolumeX } from "lucide-vue-next";
 import { loadVast, ping, type VastAd, type VastEvent } from "~/lib/vast";
+import { adDue, markAdShown, openPopunder } from "~/lib/popunder";
 import type { PlayerAds } from "#srv/videos/service";
 
 const props = withDefaults(
@@ -58,23 +59,6 @@ const skipIntro = () => {
 };
 
 // ---------------------------------------------------------------- anuncios
-/** Frecuencia por espectador (localStorage; si no está disponible, siempre se muestra). */
-const due = (key: string, everyMin: number) => {
-  if (!everyMin) return true;
-  try {
-    return Date.now() - Number(localStorage.getItem(key) ?? 0) >= everyMin * 60_000;
-  } catch {
-    return true;
-  }
-};
-const markShown = (key: string) => {
-  try {
-    localStorage.setItem(key, String(Date.now()));
-  } catch {
-    /* sin almacenamiento */
-  }
-};
-
 type AdPhase = "none" | "loading" | "ready" | "playing" | "done";
 const adPhase = ref<AdPhase>("none");
 const ad = shallowRef<VastAd | null>(null);
@@ -90,19 +74,6 @@ function adTrack(ev: VastEvent) {
   if (!ad.value || adSent.has(ev)) return;
   adSent.add(ev);
   ping(ad.value.tracking[ev]);
-}
-
-/** Popunder: se abre en otra pestaña al primer clic y la ventana del video recupera el foco. */
-function openPopunder() {
-  const url = props.ads?.popunderUrl;
-  if (!url || !due("ad:popunder", props.ads!.popunderEveryMin)) return;
-  markShown("ad:popunder");
-  const w = window.open("about:blank", "_blank");
-  if (!w) return;
-  // Sin `opener`: la página del anunciante no puede tocar la nuestra.
-  w.opener = null;
-  w.location.href = url;
-  window.focus();
 }
 
 function adClick() {
@@ -251,11 +222,11 @@ onMounted(() => {
     // Primer clic sobre el reproductor (el de «reproducir»): el navegador solo
     // permite abrir ventanas dentro de un gesto del usuario.
     const root = video.closest(".player") as HTMLElement | null;
-    const onFirstClick = () => openPopunder();
+    const onFirstClick = () => openPopunder(ads.popunderUrl, "ad:popunder", ads.popunderEveryMin);
     root?.addEventListener("click", onFirstClick, { capture: true, once: true });
     disposers.push(() => root?.removeEventListener("click", onFirstClick, { capture: true }));
   }
-  if (ads?.vastUrl && due("ad:preroll", ads.vastEveryMin)) {
+  if (ads?.vastUrl && adDue("ad:preroll", ads.vastEveryMin)) {
     adPhase.value = "loading";
     // Se pide al montar, para que el anuncio esté listo cuando el espectador pulse «reproducir».
     void loadVast(ads.vastUrl, { timeoutMs: 6000, canPlay: (type) => !!video.canPlayType(type) }).then((res) => {
@@ -281,7 +252,7 @@ onMounted(() => {
       if (!el.currentSrc) el.src = a.mediaUrl;
       adSent = new Set();
       adPhase.value = "playing";
-      markShown("ad:preroll");
+      markAdShown("ad:preroll");
       const fallbackSkip = ads.skipAfterSec > 0 ? ads.skipAfterSec : null;
       const skipAt = a.skipOffset ?? fallbackSkip;
       const onTime = () => {

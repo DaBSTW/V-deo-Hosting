@@ -294,7 +294,9 @@ En **Administración → Monetag → Anuncios del reproductor**:
   Se envían las impresiones y los eventos (inicio, cuartiles, completado, saltado, silencio).
   Admite Wrappers (hasta 5) y archivos MP4/WebM progresivos; sin VPAID.
 * **Popunder** (p. ej. Direct Link de Monetag): se abre en otra pestaña con el primer clic en el
-  reproductor (sin `opener`, para que la página del anunciante no pueda tocar la nuestra).
+  reproductor y, si está activado «También al pulsar Descargar», al pulsar el botón de descarga
+  (o al elegir la calidad), con su propia frecuencia. Sin `opener`, para que la página del
+  anunciante no pueda tocar la nuestra.
 * **Frecuencia por espectador** para cada uno (en el navegador del espectador).
 
 Nunca se muestran a los suscriptores Premium ni en cuentas suspendidas. La etiqueta, el video del

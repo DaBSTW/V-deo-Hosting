@@ -644,12 +644,13 @@ const es = {
     noActivity: "Sin actividad monetizada todavía.",
     playerAds: {
       title: "Anuncios del reproductor",
-      hint: "Pre-roll de video antes del contenido y popunder al pulsar reproducir. Nunca se muestran a los suscriptores Premium.",
+      hint: "Pre-roll de video antes del contenido y popunder al pulsar reproducir (y, si quieres, al pulsar «Descargar»). Nunca se muestran a los suscriptores Premium.",
       vast: "Etiqueta VAST del pre-roll (URL https)",
       skipAfter: "Saltar tras (s)",
       vastEvery: "Minutos entre pre-rolls (0 = siempre)",
       popunder: "Enlace del popunder (p. ej. Direct Link de Monetag)",
       popunderEvery: "Minutos entre popunders",
+      onDownload: "También al pulsar «Descargar»",
       note: "«Saltar tras» se usa si la etiqueta VAST no indica cuándo se puede saltar (0 = no se puede). El anuncio se pide desde el navegador del espectador: si no llega en 6 s o falla, el video empieza sin él.",
     },
     settlement: {

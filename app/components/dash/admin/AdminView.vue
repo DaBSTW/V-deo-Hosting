@@ -417,10 +417,16 @@ const methodCfg = (m: PayoutMethod) => {
             <span class="label">{{ t("admin.playerAds.popunder") }}</span>
             <input v-model.trim="settings.popunderUrl" type="url" placeholder="https://…" class="input font-mono !text-xs" @input="touch" />
           </label>
-          <label class="mt-3 block sm:max-w-[220px]">
-            <span class="label !text-xs">{{ t("admin.playerAds.popunderEvery") }}</span>
-            <input type="number" min="1" max="1440" :value="settings.popunderEveryMin" class="input" @input="(settings!.popunderEveryMin = num(($event.target as HTMLInputElement).value)), touch()" />
-          </label>
+          <div class="mt-3 flex flex-wrap items-end gap-4">
+            <label class="block w-full sm:max-w-[220px]">
+              <span class="label !text-xs">{{ t("admin.playerAds.popunderEvery") }}</span>
+              <input type="number" min="1" max="1440" :value="settings.popunderEveryMin" class="input" @input="(settings!.popunderEveryMin = num(($event.target as HTMLInputElement).value)), touch()" />
+            </label>
+            <label class="flex items-center gap-2.5 pb-2 text-sm font-semibold text-contrast">
+              <UiToggle :model-value="settings.popunderOnDownload" :label="t('admin.playerAds.onDownload')" @update:model-value="(v) => ((settings!.popunderOnDownload = v), touch())" />
+              {{ t("admin.playerAds.onDownload") }}
+            </label>
+          </div>
           <p class="mt-3 text-xs text-secondary">{{ t("admin.playerAds.note") }}</p>
         </fieldset>
         <label class="block">

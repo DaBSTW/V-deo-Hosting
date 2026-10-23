@@ -643,12 +643,13 @@ const en: Messages = {
     noActivity: "No monetized activity yet.",
     playerAds: {
       title: "Player ads",
-      hint: "Video pre-roll before the content and a popunder when pressing play. Never shown to Premium subscribers.",
+      hint: "Video pre-roll before the content and a popunder when pressing play (and, optionally, when pressing \"Download\"). Never shown to Premium subscribers.",
       vast: "Pre-roll VAST tag (https URL)",
       skipAfter: "Skip after (s)",
       vastEvery: "Minutes between pre-rolls (0 = always)",
       popunder: "Popunder link (e.g. Monetag Direct Link)",
       popunderEvery: "Minutes between popunders",
+      onDownload: "Also when pressing \"Download\"",
       note: "\"Skip after\" is used when the VAST tag doesn't say when it can be skipped (0 = not skippable). The ad is requested from the viewer's browser: if it doesn't arrive within 6 s or fails, the video starts without it.",
     },
     settlement: {

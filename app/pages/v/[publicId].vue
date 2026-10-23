@@ -59,6 +59,7 @@ const qualityLabel = (o: { kind: string; height: number | null }) =>
             :premium="data.viewer.premium"
             :wait-sec="data.offer?.waitSec"
             :speed-limit="data.offer?.speedLimit"
+            :popunder="data.ads?.popunderUrl && data.ads.popunderOnDownload ? { url: data.ads.popunderUrl, everyMin: data.ads.popunderEveryMin } : null"
           />
           <UiButton :color="embedOpen ? 'highlight' : 'standard'" :aria-expanded="embedOpen" @click="embedOpen = !embedOpen"><Code />{{ t("watch.embed") }}</UiButton>
           <UiButton :color="copied ? 'highlight' : 'standard'" @click="copyLink">

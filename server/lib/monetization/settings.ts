@@ -54,6 +54,8 @@ export const monetizationSettingsSchema = z.object({
   popunderUrl: z.string().max(2_000).refine(adUrl, "httpsRequired"),
   /** Minutos entre popunders para un mismo espectador. */
   popunderEveryMin: z.number().int().min(1).max(1440),
+  /** Abrir también el popunder al pulsar «Descargar» (con su propia frecuencia). */
+  popunderOnDownload: z.boolean(),
 });
 export type MonetizationSettings = z.infer<typeof monetizationSettingsSchema>;
 
@@ -78,6 +80,7 @@ export const DEFAULT_SETTINGS: MonetizationSettings = {
   vastEveryMin: 0,
   popunderUrl: "",
   popunderEveryMin: 30,
+  popunderOnDownload: true,
 };
 
 const KEY = "monetization";
