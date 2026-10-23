@@ -272,8 +272,10 @@ y se liquida con el «RPM para los demás países».
 4. Ajusta el porcentaje de reparto y las reglas antifraude.
 5. Cada mes, en **Administración → Cierre mensual**, cierra el mes anterior (ver abajo).
 
-La monetización viene **activa por defecto**: el interruptor general de la plataforma y el de cada
-cuenta nueva están encendidos desde el primer momento (el usuario puede apagar el suyo en su panel).
+La monetización está **siempre activa** en todas las cuentas: los usuarios **no pueden desactivarla**
+(su panel solo muestra el estado). El campo `User.monetizationEnabled` se conserva para que el operador
+pueda suspender una cuenta por fraude directamente en la base de datos. El interruptor general de la
+plataforma (Administración) sigue existiendo.
 Mientras no pegues el código de anuncios, ninguna vista genera ganancias, para no pagar vistas sin ingresos.
 
 ### Qué cuenta como vista monetizada

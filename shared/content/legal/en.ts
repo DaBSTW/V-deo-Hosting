@@ -44,7 +44,7 @@ export function legalDocsEn(o: OperatorInfo): Record<LegalSlug, LegalDoc> {
         {
           title: "4. Your content",
           blocks: [
-            "You keep all rights to the videos and materials you upload. To provide the service, you grant us a worldwide, non-exclusive, royalty-free licence, transferable to our providers, to host, copy, transcode, create thumbnails for, store, display and distribute your content through the links and players you share, and to show advertising alongside it when monetization is enabled.",
+            "You keep all rights to the videos and materials you upload. To provide the service, you grant us a worldwide, non-exclusive, royalty-free licence, transferable to our providers, to host, copy, transcode, create thumbnails for, store, display and distribute your content through the links and players you share, and to show advertising alongside it.",
             "This licence ends when you delete the content, except for residual backup copies for a limited time and as needed to comply with legal obligations or resolve disputes.",
             "You confirm that you have all the rights and permissions needed for the content you upload, including from the people who appear in it, and that the content does not break the law or these Terms.",
           ],
@@ -64,7 +64,7 @@ export function legalDocsEn(o: OperatorInfo): Record<LegalSlug, LegalDoc> {
         {
           title: "7. Advertising and monetization",
           blocks: [
-            "Public watch pages and embedded players may display third-party advertising. Creators may join the monetization program, which is governed by the Monetization Program Terms.",
+            "Public watch pages and embedded players show third-party advertising on every video; creators cannot turn it off (viewers with the Premium subscription don’t see it). In return, every creator takes part in the monetization program, which is governed by the Monetization Program Terms.",
           ],
         },
         {
@@ -361,7 +361,7 @@ export function legalDocsEn(o: OperatorInfo): Record<LegalSlug, LegalDoc> {
             {
               list: [
                 "Be 18 or older and have an account in good standing.",
-                "Have monetization enabled on your videos.",
+                "Monetization is always on for all your videos; it cannot be turned off, except where we suspend it under section 7.",
                 "Verify your identity before your first payout.",
                 "Not reside in countries or territories subject to sanctions that prevent us from paying you.",
               ],

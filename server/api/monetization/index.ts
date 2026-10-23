@@ -10,12 +10,14 @@ const GET = handler(async () => {
 });
 
 const schema = z.object({
-  monetizationEnabled: z.boolean().optional(),
   payoutMethod: z.string().max(40).optional(),
   payoutDetails: z.string().max(500).optional(),
 });
 
-/** PATCH /api/monetization — activar/desactivar y método de cobro. */
+/**
+ * PATCH /api/monetization — método de cobro. La monetización no se puede
+ * desactivar desde aquí: está siempre activa (solo el operador la suspende).
+ */
 const PATCH = handler(async (req) => {
   const user = await requireApiUser();
   await updateMonetizationPrefs(user.id, schema.parse(await readJson(req)));

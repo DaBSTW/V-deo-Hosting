@@ -44,7 +44,7 @@ export function legalDocsEs(o: OperatorInfo): Record<LegalSlug, LegalDoc> {
         {
           title: "4. Tu contenido",
           blocks: [
-            "Conservas todos los derechos sobre los videos y materiales que subes. Para poder prestar el servicio, nos concedes una licencia mundial, no exclusiva, gratuita y transferible a nuestros proveedores, para alojar, copiar, transcodificar, generar miniaturas, almacenar, mostrar y distribuir tu contenido a través de los enlaces y reproductores que tú compartas, así como para mostrar publicidad junto a él cuando la monetización esté activa.",
+            "Conservas todos los derechos sobre los videos y materiales que subes. Para poder prestar el servicio, nos concedes una licencia mundial, no exclusiva, gratuita y transferible a nuestros proveedores, para alojar, copiar, transcodificar, generar miniaturas, almacenar, mostrar y distribuir tu contenido a través de los enlaces y reproductores que tú compartas, así como para mostrar publicidad junto a él.",
             "Esta licencia termina cuando eliminas el contenido, salvo copias de seguridad residuales durante un tiempo limitado, y salvo lo necesario para cumplir obligaciones legales o resolver disputas.",
             "Declaras que tienes todos los derechos y permisos necesarios sobre el contenido que subes, incluidos los de las personas que aparecen en él, y que el contenido no infringe la ley ni estos Términos.",
           ],
@@ -64,7 +64,7 @@ export function legalDocsEs(o: OperatorInfo): Record<LegalSlug, LegalDoc> {
         {
           title: "7. Publicidad y monetización",
           blocks: [
-            "Las páginas públicas de reproducción y los reproductores insertados pueden mostrar publicidad de terceros. Los creadores pueden participar en el programa de monetización, que se rige por los Términos del programa de monetización.",
+            "Las páginas públicas de reproducción y los reproductores insertados muestran publicidad de terceros en todos los videos; el creador no puede desactivarla (los espectadores con la suscripción Premium no la ven). A cambio, todos los creadores participan en el programa de monetización, que se rige por los Términos del programa de monetización.",
           ],
         },
         {
@@ -371,7 +371,7 @@ export function legalDocsEs(o: OperatorInfo): Record<LegalSlug, LegalDoc> {
             {
               list: [
                 "Tener 18 años o más y una cuenta en regla.",
-                "Tener activada la monetización en tus videos.",
+                "La monetización está siempre activa en todos tus videos; no se puede desactivar, salvo suspensión por nuestra parte según el apartado 7.",
                 "Verificar tu identidad antes de cobrar por primera vez.",
                 "No residir en países o territorios sujetos a sanciones que nos impidan pagarte.",
               ],

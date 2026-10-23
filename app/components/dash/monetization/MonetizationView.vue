@@ -3,7 +3,7 @@
  * Sección «Monetización» del usuario (reparto de ingresos): saldo acreditado,
  * mes en curso con estimación, ganancias por mes y país, cobro e historial.
  */
-import { CalendarCheck, CalendarClock, Check, CircleAlert, Clock, Crown, HandCoins, Lock, ShieldCheck, TriangleAlert, Wallet } from "lucide-vue-next";
+import { BadgeCheck, CalendarCheck, CalendarClock, Check, CircleAlert, Clock, Crown, HandCoins, Lock, ShieldCheck, TriangleAlert, Wallet } from "lucide-vue-next";
 import type { MonetizationOverview } from "#srv/monetization/earnings";
 
 const d = useDashboard();
@@ -31,15 +31,6 @@ onMounted(load);
 
 const METHOD_IDS = ["PAYPAL", "USDT_TRC20", "PAYONEER", "BANK"];
 const methodLabel = (id: string) => (METHOD_IDS.includes(id) ? t.dynamic(`payoutMethods.${id}.label`) : id);
-
-async function toggle(enabled: boolean) {
-  try {
-    data.value = await api<MonetizationOverview>("/api/monetization", { method: "PATCH", body: JSON.stringify({ monetizationEnabled: enabled }) });
-    d.notify(enabled ? t("monetization.toast.enabled") : t("monetization.toast.disabled"));
-  } catch (err) {
-    d.notify(d.errMsg(err));
-  }
-}
 
 async function savePayout() {
   saving.value = true;
@@ -179,14 +170,16 @@ const KYC_COLOR = { NONE: "gray", PENDING: "orange", APPROVED: "brand", REJECTED
       />
     </div>
 
-    <!-- Interruptor -->
+    <!-- Estado (siempre activa; solo el operador puede suspenderla) -->
     <DashCard>
-      <div class="flex items-center justify-between gap-4">
+      <div class="flex items-center gap-4">
+        <span :class="['flex h-11 w-11 shrink-0 items-center justify-center rounded-xl', data.userEnabled ? 'bg-brand-highlight text-brand' : 'bg-red-soft text-red']">
+          <component :is="data.userEnabled ? BadgeCheck : CircleAlert" class="h-5 w-5" />
+        </span>
         <div class="min-w-0">
-          <h2 class="text-lg font-extrabold text-contrast">{{ t("monetization.monetizeTitle") }}</h2>
-          <p class="mt-0.5 text-sm text-secondary">{{ t("monetization.monetizeHint") }}</p>
+          <h2 class="text-lg font-extrabold text-contrast">{{ data.userEnabled ? t("monetization.monetizeTitle") : t("monetization.suspendedTitle") }}</h2>
+          <p class="mt-0.5 text-sm text-secondary">{{ data.userEnabled ? t("monetization.monetizeHint") : t("monetization.suspendedHint") }}</p>
         </div>
-        <UiToggle :model-value="data.userEnabled" :label="t('monetization.monetizeTitle')" @update:model-value="toggle" />
       </div>
     </DashCard>
 

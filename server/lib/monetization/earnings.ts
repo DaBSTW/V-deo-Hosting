@@ -34,6 +34,7 @@ export interface MonetizationOverview {
   platformEnabled: boolean;
   /** Estado de la verificación de identidad (obligatoria para cobrar). */
   kyc: Awaited<ReturnType<typeof getKycStatus>>;
+  /** `false` solo si el operador suspendió la monetización de la cuenta (p. ej. por fraude). */
   userEnabled: boolean;
   payout: { method: PayoutMethod | null; details: string | null };
   balance: { availableMicros: number; creditedMicros: number; paidMicros: number };
@@ -219,10 +220,9 @@ const DETAIL_RULES: Record<PayoutMethod, z.ZodType<string>> = {
 
 export async function updateMonetizationPrefs(
   userId: string,
-  patch: { monetizationEnabled?: boolean; payoutMethod?: string; payoutDetails?: string },
+  patch: { payoutMethod?: string; payoutDetails?: string },
 ) {
   const data: Prisma.UserUpdateInput = {};
-  if (patch.monetizationEnabled !== undefined) data.monetizationEnabled = patch.monetizationEnabled;
   if (patch.payoutMethod !== undefined) {
     const settings = await getMonetizationSettings();
     const method = patch.payoutMethod as PayoutMethod;
