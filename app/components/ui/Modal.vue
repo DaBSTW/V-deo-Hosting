@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { X } from "lucide-vue-next";
 
-/** Ventana modal: cierra con Escape, clic fuera o el botón ×. */
+/**
+ * Ventana modal: cierra con Escape, clic fuera o el botón ×.
+ * Alto en `dvh`: en Android `vh` no descuenta las barras del navegador y la
+ * cabecera (con el botón ×) quedaba fuera de la pantalla.
+ */
 const props = withDefaults(defineProps<{ open: boolean; title?: string; size?: "sm" | "md" | "lg" | "xl" }>(), { size: "md" });
 const emit = defineEmits<{ close: [] }>();
 const { t } = useI18n();
@@ -34,7 +38,7 @@ onBeforeUnmount(() => {
       leave-to-class="opacity-0"
     >
       <div v-if="open" class="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 backdrop-blur-sm sm:items-center sm:p-4" @mousedown.self="emit('close')">
-        <div role="dialog" aria-modal="true" :aria-label="title" :class="['flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-raised shadow-floating sm:rounded-2xl', width]">
+        <div role="dialog" aria-modal="true" :aria-label="title" :class="['flex max-h-[calc(100dvh-2.5rem)] w-full flex-col overflow-hidden rounded-t-2xl bg-raised pb-[env(safe-area-inset-bottom)] shadow-floating sm:max-h-[92dvh] sm:rounded-2xl sm:pb-0', width]">
           <header v-if="title || $slots.header" class="flex items-center justify-between gap-4 px-5 pb-2 pt-4">
             <slot name="header">
               <h2 class="truncate text-lg font-extrabold text-contrast">{{ title }}</h2>

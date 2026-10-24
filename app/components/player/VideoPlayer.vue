@@ -486,6 +486,17 @@ onBeforeUnmount(() => cleanup?.());
 .player :deep(.plyr__video-wrapper) {
   height: 100%;
 }
+/* En pantallas estrechas el deslizador de volumen dejaba la barra de progreso
+   en unos píxeles: se queda solo el botón de silencio (el volumen va por el móvil). */
+@media (max-width: 480px) {
+  .player :deep(.plyr__volume input[type="range"]) {
+    display: none;
+  }
+  .player :deep(.plyr__volume) {
+    min-width: 0;
+    width: auto;
+  }
+}
 .player-wm {
   position: absolute;
   z-index: 3;
