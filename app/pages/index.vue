@@ -2,26 +2,34 @@
 import { PLAYER_COLORS, contrastOn } from "#shared/lib/player-settings";
 import {
   ArrowRight,
+  Calculator,
   ChartNoAxesColumn,
   Check,
+  Clapperboard,
   Code,
   Crown,
   Download,
   FolderOpen,
+  Gamepad2,
   Gauge,
   Globe,
+  GraduationCap,
   History,
   Languages,
   Lock,
   MonitorPlay,
+  Music,
+  Newspaper,
   Palette,
   Play,
   Plus,
+  Radio,
   Repeat,
   ShieldCheck,
   Stamp,
   Timer,
   Upload,
+  X,
   Zap,
 } from "lucide-vue-next";
 
@@ -32,11 +40,13 @@ interface HomeData {
   minWatchSeconds: number;
   revenueSharePct: number | null;
   verificationMeta: { name: string; content: string } | null;
+  calculator: { month: string | null; countries: { code: string; creatorRpm: number }[] };
   premium: { monthlyUsd: number; yearlyUsd: number; waitSec: number; sharePct: number; speedLimit: boolean } | null;
 }
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const fmt = useFormat();
+const appName = useAppName();
 const { user } = useSession();
 const { data } = await useFetch<HomeData>("/api/public/home");
 
@@ -56,18 +66,54 @@ const highlights = [
 ] as const;
 
 const features = [
-  { key: "upload", icon: Upload },
   { key: "player", icon: MonitorPlay },
   { key: "embed", icon: Code },
-  { key: "library", icon: FolderOpen },
-  { key: "stats", icon: ChartNoAxesColumn },
+  { key: "upload", icon: Upload },
   { key: "downloads", icon: Download },
+  { key: "stats", icon: ChartNoAxesColumn },
+  { key: "library", icon: FolderOpen },
 ] as const;
 
 /** Porcentaje del RPM real para los creadores (30 % por defecto si la monetización está desactivada). */
 const share = computed(() => data.value?.revenueSharePct ?? 30);
 const example = computed(() => ({ rpm: fmt.formatUsd(1.5), creator: fmt.formatUsd((1.5 * share.value) / 100) }));
-const openFaq = ref<number | null>(1);
+const openFaq = ref<number | null>(8);
+/** Primero las preguntas de quien llega desde YouTube o WordPress. */
+const faqOrder = [8, 9, 10, 11, 1, 2, 3, 4, 5, 6, 7];
+
+const audiences = [
+  { key: "blogs", icon: Newspaper },
+  { key: "creators", icon: Clapperboard },
+  { key: "academies", icon: GraduationCap },
+  { key: "media", icon: Radio },
+  { key: "music", icon: Music },
+  { key: "gaming", icon: Gamepad2 },
+] as const;
+
+/** Comparativa con YouTube y Vimeo (true/false = ✓/✗; texto = clave de `landing.compare`). */
+type Cell = boolean | "free" | "paid" | "paidPlans";
+const compareRows: { key: "earn" | "noRecs" | "brand" | "downloads" | "price"; cells: [Cell, Cell, Cell] }[] = [
+  { key: "earn", cells: [true, false, false] },
+  { key: "noRecs", cells: [true, false, true] },
+  { key: "brand", cells: [true, false, "paid"] },
+  { key: "downloads", cells: [true, false, "paid"] },
+  { key: "price", cells: ["free", "free", "paidPlans"] },
+];
+
+/** Calculadora: RPM para el creador del último cierre (o de ejemplo, ya con su %). */
+const calcViews = ref(50_000);
+const calcCountry = ref("MX");
+const regionNames = computed(() => new Intl.DisplayNames([locale.value], { type: "region" }));
+const countryName = (code: string) => regionNames.value.of(code) ?? code;
+const calcRpm = computed(() => data.value?.calculator.countries.find((c) => c.code === calcCountry.value)?.creatorRpm ?? 0);
+const calcResult = computed(() => fmt.formatUsd((calcViews.value / 1000) * calcRpm.value));
+const calcNote = computed(() => {
+  const month = data.value?.calculator.month;
+  const country = countryName(calcCountry.value);
+  if (!month) return t("landing.calc.noteExample", { country, share: share.value });
+  const label = new Intl.DateTimeFormat(locale.value, { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${month}-01T00:00:00Z`));
+  return t("landing.calc.noteReal", { country, month: label, share: share.value });
+});
 
 /** «Velocidad sin límite» solo se anuncia si los gratuitos la tienen limitada. */
 /** Sección «Reproductor personalizable»: muestras de color para probar en vivo. */
@@ -97,6 +143,7 @@ function faqAnswer(n: number): string {
   if (n === 2) return t("landing.faq.a2", { max: fmt.formatBytes(data.value?.maxUploadBytes ?? 0) });
   if (n === 3) return t("landing.faq.a3", { seconds: data.value?.minWatchSeconds ?? 60 });
   if (n === 4) return t("landing.faq.a4", { min: minPayout.value });
+  if (n === 10) return t("landing.faq.a10", { min: minPayout.value });
   return t.dynamic(`landing.faq.a${n}`);
 }
 </script>
@@ -116,7 +163,7 @@ function faqAnswer(n: number): string {
             <template #accent="{ text }"><span class="text-brand">{{ text }}</span></template>
           </IntlText>
         </h1>
-        <p class="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-secondary">{{ t("landing.hero.subtitle") }}</p>
+        <p class="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-secondary">{{ t("landing.hero.subtitle", { share }) }}</p>
         <div class="mt-9 flex flex-wrap justify-center gap-3">
           <UiButton :to="user ? '/dashboard' : '/register'" color="brand" size="lg">
             {{ user ? t("landing.cta.dashboard") : t("landing.hero.primary") }}
@@ -124,7 +171,13 @@ function faqAnswer(n: number): string {
           </UiButton>
           <UiButton to="/#how" size="lg">{{ t("landing.hero.secondary") }}</UiButton>
         </div>
-        <p class="mt-5 text-sm text-secondary">{{ t("landing.hero.note") }}</p>
+        <p class="mt-5 text-sm text-secondary">{{ t("landing.hero.note", { max: fmt.formatBytes(data?.maxUploadBytes ?? 0), min: minPayout }) }}</p>
+        <div class="mt-8 flex flex-wrap items-center justify-center gap-2">
+          <span class="mr-1 text-sm font-bold text-secondary">{{ t("landing.hero.idealFor") }}</span>
+          <span v-for="a in audiences" :key="a.key" class="inline-flex items-center gap-1.5 rounded-full border border-divider bg-raised px-3.5 py-1.5 text-sm font-bold text-contrast">
+            <component :is="a.icon" class="h-4 w-4 text-brand" />{{ t.dynamic(`landing.hero.audiences.${a.key}`) }}
+          </span>
+        </div>
         <div class="mt-16"><HomeShowcase /></div>
       </div>
     </section>
@@ -149,6 +202,35 @@ function faqAnswer(n: number): string {
           <p class="mt-2 text-[15px] leading-relaxed text-secondary">{{ t.dynamic(`landing.features.${f.key}.text`) }}</p>
         </article>
       </div>
+    </section>
+
+    <!-- Comparativa -->
+    <section class="mx-auto max-w-[1100px] px-4 pb-24 sm:px-6">
+      <HomeSectionHeading center :eyebrow="t('landing.compare.eyebrow')" :title="t('landing.compare.title')" :subtitle="t('landing.compare.subtitle')" />
+      <div class="mt-10 overflow-hidden rounded-2xl bg-raised shadow-card">
+        <table class="w-full table-fixed text-[13px] sm:text-sm">
+          <colgroup><col class="w-[40%]" /><col /><col /><col /></colgroup>
+          <thead>
+            <tr class="border-b border-divider text-left">
+              <th class="px-2 py-4 sm:px-5"><span class="sr-only">{{ t("landing.compare.eyebrow") }}</span></th>
+              <th class="bg-brand-soft px-2 py-4 sm:px-5 text-center"><span class="inline-flex rounded-full bg-brand-highlight px-1.5 py-1 text-xs font-extrabold text-brand sm:px-3 sm:text-sm">{{ appName }}</span></th>
+              <th class="px-2 py-4 sm:px-5 text-center font-bold text-secondary">YouTube</th>
+              <th class="px-2 py-4 sm:px-5 text-center font-bold text-secondary">Vimeo</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="r in compareRows" :key="r.key" class="border-b border-divider last:border-0">
+              <th scope="row" class="py-3.5 pl-4 pr-2 text-left sm:px-5 font-semibold text-contrast">{{ t.dynamic(`landing.compare.${r.key}`) }}</th>
+              <td v-for="(v, i) in r.cells" :key="i" :class="['px-2 py-3.5 sm:px-5 text-center', i === 0 ? 'bg-brand-soft' : '']">
+                <span v-if="typeof v === 'string'" :class="['font-bold', i === 0 ? 'text-brand' : 'text-secondary']">{{ t.dynamic(`landing.compare.${v}`) }}</span>
+                <Check v-else-if="v" :class="['mx-auto h-5 w-5', i === 0 ? 'text-brand' : 'text-primary']" :aria-label="t('landing.compare.yes')" />
+                <X v-else class="mx-auto h-5 w-5 text-red" :aria-label="t('landing.compare.no')" />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="mx-auto mt-3 max-w-3xl text-center text-xs leading-relaxed text-secondary">{{ t("landing.compare.note") }}</p>
     </section>
 
     <!-- Cómo funciona -->
@@ -240,6 +322,41 @@ function faqAnswer(n: number): string {
       </div>
     </section>
 
+    <!-- Calculadora -->
+    <section v-if="data" class="mx-auto max-w-[1280px] px-4 pb-16 sm:px-6">
+      <div class="relative overflow-hidden rounded-3xl border border-divider bg-surface p-6 sm:p-10">
+        <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(50%_80%_at_100%_0%,var(--hero-glow),transparent)]" />
+        <div class="relative grid items-center gap-8 lg:grid-cols-[1.2fr_1fr]">
+          <div class="min-w-0">
+            <span class="inline-flex items-center gap-1.5 text-sm font-bold text-brand"><Calculator class="h-4 w-4" />{{ t("landing.calc.eyebrow") }}</span>
+            <h2 class="mt-2 text-3xl font-extrabold tracking-tight text-contrast">{{ t("landing.calc.title") }}</h2>
+            <label class="mt-6 block">
+              <span class="flex items-center justify-between gap-3 text-sm font-bold text-contrast"><span>{{ t("landing.calc.views") }}</span><span class="tabular-nums text-brand">{{ fmt.formatCount(calcViews) }}</span></span>
+              <input v-model.number="calcViews" type="range" min="1000" max="1000000" step="1000" class="mt-3 w-full accent-[var(--brand)]" />
+            </label>
+            <div class="mt-5 flex flex-wrap gap-2">
+              <button
+                v-for="c in data.calculator.countries"
+                :key="c.code"
+                type="button"
+                :aria-pressed="calcCountry === c.code"
+                :class="['rounded-full px-3.5 py-1.5 text-sm font-bold transition', calcCountry === c.code ? 'bg-brand text-on-brand' : 'bg-button text-secondary hover:text-contrast']"
+                @click="calcCountry = c.code"
+              >
+                {{ countryName(c.code) }}
+              </button>
+            </div>
+          </div>
+          <div class="min-w-0 rounded-2xl bg-raised p-6 text-center shadow-card">
+            <p class="text-sm font-bold text-secondary">{{ t("landing.calc.result") }}</p>
+            <p class="mt-2 text-5xl font-extrabold tabular-nums tracking-tight text-contrast" aria-live="polite">≈ {{ calcResult }}</p>
+            <p class="mt-3 text-xs leading-relaxed text-secondary">{{ calcNote }}</p>
+            <UiButton :to="user ? '/dashboard' : '/register'" color="brand" block class="mt-5">{{ user ? t("landing.cta.dashboard") : t("landing.calc.cta") }}<ArrowRight /></UiButton>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- Monetización -->
     <section id="monetization" class="scroll-mt-20 px-4 sm:px-6">
       <div class="relative mx-auto grid max-w-[1280px] grid-cols-1 gap-10 overflow-hidden rounded-3xl border border-divider bg-surface p-6 sm:p-10 lg:grid-cols-2">
@@ -308,7 +425,7 @@ function faqAnswer(n: number): string {
     <section id="faq" class="mx-auto max-w-3xl scroll-mt-20 px-4 py-24 sm:px-6">
       <HomeSectionHeading center :eyebrow="t('landing.faq.eyebrow')" :title="t('landing.faq.title')" />
       <div class="mt-12 space-y-3">
-        <div v-for="n in 7" :key="n" class="overflow-hidden rounded-2xl bg-raised">
+        <div v-for="n in faqOrder" :key="n" class="overflow-hidden rounded-2xl bg-raised">
           <button
             type="button"
             class="flex w-full items-center justify-between gap-4 px-5 py-4 text-left font-bold text-contrast"
