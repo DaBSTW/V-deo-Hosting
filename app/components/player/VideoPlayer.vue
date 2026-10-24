@@ -638,7 +638,9 @@ button.player-ad__skip:hover {
   pointer-events: none;
   transition: opacity 0.3s;
 }
-:global(.plyr--hide-controls) .player-title {
+/* Solo el título: `:global(.plyr--hide-controls) .player-title` compila a
+   `.plyr--hide-controls` y dejaba transparente todo el reproductor. */
+.player :deep(.plyr--hide-controls .player-title) {
   opacity: 0;
 }
 </style>
